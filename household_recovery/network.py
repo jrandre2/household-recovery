@@ -35,10 +35,11 @@ import numpy as np
 import networkx as nx
 
 from .agents import HouseholdAgent, InfrastructureNode, BusinessNode, SimulationContext
-from .config import NetworkType, ThresholdConfig, InfrastructureConfig, NetworkConfig
+from .config import NetworkType, ThresholdConfig, InfrastructureConfig, NetworkConfig, RecovUSConfig
 
 if TYPE_CHECKING:
     from .heuristics import Heuristic
+    from .decision_model import DecisionModel
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,7 @@ class CommunityNetwork:
     rng: np.random.Generator = field(default_factory=np.random.default_rng)
     # Store configs for use during simulation steps
     infra_config: InfrastructureConfig = field(default_factory=InfrastructureConfig)
+    recovus_config: RecovUSConfig = field(default_factory=RecovUSConfig)
 
     @classmethod
     def create(
@@ -74,6 +76,7 @@ class CommunityNetwork:
         thresholds: ThresholdConfig | None = None,
         infra_config: InfrastructureConfig | None = None,
         network_config: NetworkConfig | None = None,
+        recovus_config: RecovUSConfig | None = None,
     ) -> CommunityNetwork:
         """
         Create a new community network.
@@ -88,6 +91,7 @@ class CommunityNetwork:
             thresholds: Configuration for income/resilience classification
             infra_config: Configuration for infrastructure parameters
             network_config: Configuration for network connection parameters
+            recovus_config: Configuration for RecovUS decision model
 
         Returns:
             Initialized CommunityNetwork
@@ -101,6 +105,8 @@ class CommunityNetwork:
             infra_config = InfrastructureConfig()
         if network_config is None:
             network_config = NetworkConfig()
+        if recovus_config is None:
+            recovus_config = RecovUSConfig()
 
         # Create base graph
         graph = cls._create_base_graph(num_households, network_type, connectivity, rng)
@@ -108,7 +114,7 @@ class CommunityNetwork:
         # Create agents
         households = {}
         for i in range(num_households):
-            households[i] = HouseholdAgent.generate_random(i, rng, thresholds)
+            households[i] = HouseholdAgent.generate_random(i, rng, thresholds, recovus_config)
 
         # Create infrastructure
         infrastructure = {}
@@ -144,6 +150,7 @@ class CommunityNetwork:
             businesses=businesses,
             rng=rng,
             infra_config=infra_config,
+            recovus_config=recovus_config,
         )
 
         logger.info(
@@ -220,22 +227,37 @@ class CommunityNetwork:
             if isinstance(n, str) and n.startswith('business_')
         ]
 
-    def get_context_for_household(self, household_id: int) -> SimulationContext:
+    def get_context_for_household(
+        self,
+        household_id: int,
+        time_step: int = 0,
+    ) -> SimulationContext:
         """
         Build the simulation context for a specific household.
 
         Aggregates information about neighbors, infrastructure, and businesses.
+
+        Args:
+            household_id: ID of the household to get context for
+            time_step: Current simulation time step
+
+        Returns:
+            SimulationContext with all relevant context information
         """
         household = self.households[household_id]
 
         # Neighbor recovery
         neighbor_ids = self.get_household_neighbors(household_id)
         if neighbor_ids:
-            avg_neighbor_recovery = np.mean([
-                self.households[n].recovery for n in neighbor_ids
+            neighbor_recoveries = [self.households[n].recovery for n in neighbor_ids]
+            avg_neighbor_recovery = np.mean(neighbor_recoveries)
+            # For RecovUS: percentage of neighbors fully recovered (recovery >= 0.95)
+            avg_neighbor_recovered_binary = np.mean([
+                1.0 if r >= 0.95 else 0.0 for r in neighbor_recoveries
             ])
         else:
             avg_neighbor_recovery = 0.0
+            avg_neighbor_recovered_binary = 0.0
 
         # Infrastructure functionality
         infra_ids = self.get_connected_infrastructure(household_id)
@@ -264,13 +286,19 @@ class CommunityNetwork:
             resilience_category=household.resilience_category,
             household_income=household.income,
             income_level=household.income_level,
+            # RecovUS context
+            time_step=time_step,
+            months_since_disaster=time_step,  # Assume 1 step = 1 month
+            avg_neighbor_recovered_binary=avg_neighbor_recovered_binary,
         )
 
     def step(
         self,
         heuristics: list[Heuristic],
         base_recovery_rate: float = 0.1,
-        utility_weights: dict[str, float] | None = None
+        utility_weights: dict[str, float] | None = None,
+        decision_model: DecisionModel | None = None,
+        time_step: int = 0,
     ) -> float:
         """
         Execute one simulation step.
@@ -278,18 +306,42 @@ class CommunityNetwork:
         1. Each household makes a recovery decision
         2. Infrastructure and businesses update based on household recovery
 
+        Args:
+            heuristics: List of behavioral heuristics to apply
+            base_recovery_rate: Base recovery rate per step
+            utility_weights: Weights for utility calculation (legacy model)
+            decision_model: Optional decision model (RecovUS or Utility)
+            time_step: Current simulation time step
+
         Returns:
             Average household recovery after this step
         """
         # Household decisions
         for hh_id, household in self.households.items():
-            context = self.get_context_for_household(hh_id)
-            household.decide_recovery(
-                context=context,
-                heuristics=heuristics,
-                base_rate=base_recovery_rate,
-                utility_weights=utility_weights
-            )
+            context = self.get_context_for_household(hh_id, time_step)
+
+            if decision_model is not None:
+                # Use the provided decision model
+                params = {
+                    'base_rate': base_recovery_rate,
+                    'weights': utility_weights,
+                }
+                new_recovery, action = decision_model.decide(
+                    household=household,
+                    context=context,
+                    heuristics=heuristics,
+                    params=params,
+                )
+                household.recovery = new_recovery
+                household.decision_history.append(action)
+            else:
+                # Fall back to legacy utility-based decision
+                household.decide_recovery(
+                    context=context,
+                    heuristics=heuristics,
+                    base_rate=base_recovery_rate,
+                    utility_weights=utility_weights
+                )
 
         # Infrastructure updates
         for infra_id, infra in self.infrastructure.items():

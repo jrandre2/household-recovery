@@ -25,13 +25,19 @@ import numpy as np
 
 if TYPE_CHECKING:
     from .heuristics import Heuristic
-    from .config import ThresholdConfig, InfrastructureConfig
+    from .config import ThresholdConfig, InfrastructureConfig, RecovUSConfig
+    from .decision_model import DecisionModel
 
 logger = logging.getLogger(__name__)
 
 # Type aliases for clarity
 IncomeLevel = Literal['low', 'middle', 'high']
 ResilienceCategory = Literal['low', 'medium', 'high']
+
+# RecovUS type aliases
+PerceptionType = Literal['infrastructure', 'social', 'community']
+DamageSeverity = Literal['none', 'minor', 'moderate', 'severe', 'destroyed']
+RecoveryState = Literal['waiting', 'repairing', 'recovered', 'relocated']
 
 
 @dataclass
@@ -42,6 +48,7 @@ class SimulationContext:
     Contains neighborhood-level aggregate information that agents
     use to make recovery decisions.
     """
+    # Core context (original)
     avg_neighbor_recovery: float = 0.0
     avg_infra_func: float = 0.0
     avg_business_avail: float = 0.0
@@ -50,6 +57,11 @@ class SimulationContext:
     resilience_category: ResilienceCategory = 'medium'
     household_income: float = 60000.0
     income_level: IncomeLevel = 'middle'
+
+    # RecovUS context (extended)
+    time_step: int = 0
+    months_since_disaster: int = 0
+    avg_neighbor_recovered_binary: float = 0.0  # % of neighbors fully recovered
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for heuristic evaluation."""
@@ -62,6 +74,10 @@ class SimulationContext:
             'resilience_category': self.resilience_category,
             'household_income': self.household_income,
             'income_level': self.income_level,
+            # RecovUS fields
+            'time_step': self.time_step,
+            'months_since_disaster': self.months_since_disaster,
+            'avg_neighbor_recovered_binary': self.avg_neighbor_recovered_binary,
         }
 
 
@@ -76,6 +92,12 @@ class HouseholdAgent:
     - The state of infrastructure and businesses
     - Behavioral heuristics from research
 
+    With RecovUS integration, households also have:
+    - Perception type (ASNA index): infrastructure, social, or community-aware
+    - Financial resources: insurance, FEMA, SBA, liquid assets, CDBG-DR
+    - Damage attributes: severity, repair cost, habitability
+    - Recovery state: waiting, repairing, recovered, or relocated
+
     Attributes:
         id: Unique identifier for this household
         income: Annual household income in dollars
@@ -84,6 +106,7 @@ class HouseholdAgent:
         resilience_category: Categorical resilience classification
         recovery: Current recovery level (0=not recovered, 1=fully recovered)
     """
+    # Core attributes (original)
     id: int
     income: float
     income_level: IncomeLevel
@@ -94,12 +117,55 @@ class HouseholdAgent:
     # Track recovery history for analysis
     recovery_history: list[float] = field(default_factory=list, repr=False)
 
+    # RecovUS: Perception type (ASNA Index)
+    perception_type: PerceptionType = 'infrastructure'
+
+    # RecovUS: Financial resources
+    insurance_payout: float = 0.0
+    fema_ha_grant: float = 0.0
+    sba_loan_amount: float = 0.0
+    liquid_assets: float = 0.0
+    cdbg_dr_allocation: float = 0.0
+
+    # RecovUS: Damage and costs
+    damage_severity: DamageSeverity = 'none'
+    repair_cost: float = 0.0
+    is_habitable: bool = True
+    temporary_housing_cost: float = 0.0
+    home_value: float = 0.0
+
+    # RecovUS: Recovery state machine
+    recovery_state: RecoveryState = 'waiting'
+    decision_history: list[str] = field(default_factory=list, repr=False)
+
+    @property
+    def total_resources(self) -> float:
+        """Total available financial resources."""
+        return (
+            self.insurance_payout +
+            self.fema_ha_grant +
+            self.sba_loan_amount +
+            self.liquid_assets +
+            self.cdbg_dr_allocation
+        )
+
+    @property
+    def total_costs(self) -> float:
+        """Total recovery costs."""
+        return self.repair_cost + self.temporary_housing_cost
+
+    @property
+    def is_financially_feasible(self) -> bool:
+        """Check if household has financial feasibility."""
+        return self.total_resources >= self.total_costs
+
     @classmethod
     def generate_random(
         cls,
         agent_id: int,
         rng: np.random.Generator | None = None,
         thresholds: ThresholdConfig | None = None,
+        recovus_config: RecovUSConfig | None = None,
     ) -> HouseholdAgent:
         """
         Generate a household with random but realistic attributes.
@@ -107,11 +173,18 @@ class HouseholdAgent:
         Uses log-normal distribution for income (right-skewed, realistic)
         and beta distribution for resilience (bounded 0-1, flexible shape).
 
+        When recovus_config is provided, also generates:
+        - Perception type based on ASNA distribution
+        - Damage severity and repair costs
+        - Financial resources (insurance, FEMA, SBA, etc.)
+
         Args:
             agent_id: Unique identifier for this agent
             rng: Random number generator for reproducibility
             thresholds: Configuration for income/resilience classification thresholds.
                         If None, uses default thresholds.
+            recovus_config: Configuration for RecovUS attributes.
+                           If None, uses defaults for RecovUS fields.
         """
         if rng is None:
             rng = np.random.default_rng()
@@ -145,6 +218,14 @@ class HouseholdAgent:
         else:
             resilience_category = 'high'
 
+        # Generate RecovUS attributes
+        recovus_attrs = cls._generate_recovus_attributes(
+            income=income,
+            income_level=income_level,
+            rng=rng,
+            recovus_config=recovus_config,
+        )
+
         return cls(
             id=agent_id,
             income=income,
@@ -152,7 +233,176 @@ class HouseholdAgent:
             resilience=resilience,
             resilience_category=resilience_category,
             recovery=0.0,
+            **recovus_attrs,
         )
+
+    @classmethod
+    def _generate_recovus_attributes(
+        cls,
+        income: float,
+        income_level: IncomeLevel,
+        rng: np.random.Generator,
+        recovus_config: RecovUSConfig | None = None,
+    ) -> dict[str, Any]:
+        """
+        Generate RecovUS-specific attributes for a household.
+
+        Args:
+            income: Household annual income
+            income_level: Categorical income level
+            rng: Random generator
+            recovus_config: RecovUS configuration
+
+        Returns:
+            Dictionary of RecovUS attribute values
+        """
+        from .config import RecovUSConfig
+
+        if recovus_config is None:
+            recovus_config = RecovUSConfig()
+
+        # Assign perception type based on ASNA distribution
+        perception_type = cls._assign_perception_type(rng, recovus_config)
+
+        # Estimate home value based on income
+        home_value = income * rng.uniform(2.5, 5.0)
+
+        # Assign damage severity
+        damage_severity = cls._assign_damage_severity(rng, recovus_config)
+
+        # Calculate repair cost based on damage
+        damage_multipliers = {
+            'none': 0.0,
+            'minor': recovus_config.damage_cost_minor,
+            'moderate': recovus_config.damage_cost_moderate,
+            'severe': recovus_config.damage_cost_severe,
+            'destroyed': recovus_config.damage_cost_destroyed,
+        }
+        repair_cost = home_value * damage_multipliers.get(damage_severity, 0.0)
+
+        # Determine habitability
+        is_habitable = damage_severity in ('none', 'minor')
+
+        # Calculate temporary housing cost if uninhabitable
+        if is_habitable:
+            temp_housing_cost = 0.0
+        else:
+            months_map = {
+                'moderate': 3,
+                'severe': 6,
+                'destroyed': 12,
+            }
+            months = months_map.get(damage_severity, 6)
+            temp_housing_cost = recovus_config.temp_housing_monthly * months
+
+        # Generate financial resources
+        resources = cls._generate_financial_resources(
+            income=income,
+            income_level=income_level,
+            repair_cost=repair_cost,
+            rng=rng,
+            recovus_config=recovus_config,
+        )
+
+        return {
+            'perception_type': perception_type,
+            'home_value': round(home_value, 2),
+            'damage_severity': damage_severity,
+            'repair_cost': round(repair_cost, 2),
+            'is_habitable': is_habitable,
+            'temporary_housing_cost': round(temp_housing_cost, 2),
+            'insurance_payout': resources['insurance'],
+            'fema_ha_grant': resources['fema_ha'],
+            'sba_loan_amount': resources['sba_loan'],
+            'liquid_assets': resources['liquid_assets'],
+            'cdbg_dr_allocation': resources['cdbg_dr'],
+            'recovery_state': 'waiting',
+        }
+
+    @classmethod
+    def _assign_perception_type(
+        cls,
+        rng: np.random.Generator,
+        recovus_config: RecovUSConfig,
+    ) -> PerceptionType:
+        """Assign perception type based on ASNA distribution."""
+        r = rng.random()
+        if r < recovus_config.perception_infrastructure:
+            return 'infrastructure'
+        elif r < recovus_config.perception_infrastructure + recovus_config.perception_social:
+            return 'social'
+        else:
+            return 'community'
+
+    @classmethod
+    def _assign_damage_severity(
+        cls,
+        rng: np.random.Generator,
+        recovus_config: RecovUSConfig,
+    ) -> DamageSeverity:
+        """Assign damage severity based on distribution."""
+        # Default disaster scenario distribution
+        distribution = {
+            'none': 0.10,
+            'minor': 0.30,
+            'moderate': 0.35,
+            'severe': 0.20,
+            'destroyed': 0.05,
+        }
+        severities = list(distribution.keys())
+        probabilities = list(distribution.values())
+        return rng.choice(severities, p=probabilities)
+
+    @classmethod
+    def _generate_financial_resources(
+        cls,
+        income: float,
+        income_level: IncomeLevel,
+        repair_cost: float,
+        rng: np.random.Generator,
+        recovus_config: RecovUSConfig,
+    ) -> dict[str, float]:
+        """Generate financial resources for a household."""
+        # Insurance: probabilistic coverage
+        has_insurance = rng.random() < recovus_config.insurance_penetration_rate
+        if has_insurance and repair_cost > 0:
+            coverage_rate = rng.uniform(0.60, 0.80)
+            insurance = repair_cost * coverage_rate
+        else:
+            insurance = 0.0
+
+        # FEMA-HA: for uninsured/underinsured, capped
+        remaining_gap = max(0, repair_cost - insurance)
+        if remaining_gap > 0:
+            fema_ha = min(remaining_gap, recovus_config.fema_ha_max)
+        else:
+            fema_ha = 0.0
+
+        # SBA loans: income-qualified
+        sba_eligible = income >= recovus_config.sba_income_floor
+        if sba_eligible and rng.random() < recovus_config.sba_uptake_rate:
+            sba_loan = min(remaining_gap, recovus_config.sba_loan_max)
+        else:
+            sba_loan = 0.0
+
+        # Liquid assets: 1-20% of estimated net worth
+        net_worth_estimate = income * rng.uniform(2.0, 8.0)
+        liquid_assets = net_worth_estimate * rng.uniform(0.01, 0.20)
+
+        # CDBG-DR: targeted to low-income
+        cdbg_eligible = income_level == 'low'
+        if cdbg_eligible and rng.random() < recovus_config.cdbg_dr_probability:
+            cdbg_dr = repair_cost * recovus_config.cdbg_dr_coverage_rate
+        else:
+            cdbg_dr = 0.0
+
+        return {
+            'insurance': round(insurance, 2),
+            'fema_ha': round(fema_ha, 2),
+            'sba_loan': round(sba_loan, 2),
+            'liquid_assets': round(liquid_assets, 2),
+            'cdbg_dr': round(cdbg_dr, 2),
+        }
 
     def calculate_utility(
         self,

@@ -7,7 +7,7 @@ Learn how to use the Retrieval-Augmented Generation pipeline to extract behavior
 RAG (Retrieval-Augmented Generation) grounds the simulation in actual research:
 
 1. **Retrieve**: Fetch academic papers from Google Scholar
-2. **Augment**: Use paper abstracts as context for an LLM
+2. **Augment**: Use paper text as context (Scholar abstracts; PDF full-text excerpts when enabled)
 3. **Generate**: LLM extracts actionable heuristics
 
 This ensures simulation behavior is based on real research findings rather than arbitrary assumptions.
@@ -92,6 +92,17 @@ IF ctx['resilience'] > 0.7 THEN {'extra_recovery': 0.1}
 - `{'boost': 0.6}` - Reduce recovery rate to 60%
 - `{'extra_recovery': 0.1}` - Add 0.1 to recovery increment
 
+### RecovUS Actions
+
+When RecovUS is enabled, heuristics modify transition probabilities and adequacy thresholds:
+
+- `{'modify_r0': 1.1}` - Multiply r0 (repair when feasible only)
+- `{'modify_r1': 0.9}` - Multiply r1 (repair when feasible + adequate)
+- `{'modify_r2': 1.05}` - Multiply r2 (complete when repairing)
+- `{'modify_adq_infr': -0.05}` - Lower infrastructure adequacy threshold
+- `{'modify_adq_nbr': 0.05}` - Raise neighbor adequacy threshold
+- `{'modify_adq_cas': -0.1}` - Lower community assets threshold
+
 ### Context Variables
 
 Heuristics can reference these variables:
@@ -107,6 +118,22 @@ Heuristics can reference these variables:
 | `household_income` | float | Annual income |
 | `income_level` | str | 'low', 'middle', 'high' |
 
+### RecovUS Context Variables
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `perception_type` | str | 'infrastructure', 'social', 'community' |
+| `damage_severity` | str | 'none', 'minor', 'moderate', 'severe', 'destroyed' |
+| `recovery_state` | str | 'waiting', 'repairing', 'recovered', 'relocated' |
+| `is_feasible` | bool | Financial feasibility flag |
+| `is_adequate` | bool | Community adequacy flag |
+| `is_habitable` | bool | Whether home is habitable |
+| `repair_cost` | float | Estimated repair cost |
+| `available_resources` | float | Total available resources |
+| `time_step` | int | Current simulation step |
+| `months_since_disaster` | int | Months since disaster |
+| `avg_neighbor_recovered_binary` | float | % of neighbors fully recovered |
+
 ## Extracted Parameters
 
 Beyond heuristics, the RAG pipeline extracts numeric parameters:
@@ -115,6 +142,7 @@ Beyond heuristics, the RAG pipeline extracts numeric parameters:
 - **Income thresholds** from socioeconomic research
 - **Resilience thresholds** from empirical studies
 - **Utility weights** from network analysis
+- **RecovUS parameters** (perception, adequacy, transitions, financials) when RecovUS extraction is enabled
 
 ### Parameter Precedence
 
@@ -138,6 +166,18 @@ engine = SimulationEngine(
     config,
     api_config=api_config,
     research_config=research_config
+)
+```
+
+### US-Only and PDF Settings
+
+```python
+from household_recovery.config import ResearchConfig
+
+research_config = ResearchConfig(
+    us_only=True,          # Filter to US-based studies
+    pdf_use_full_text=True,  # Use full PDF text for local PDFs
+    pdf_max_pages=None     # None = all pages
 )
 ```
 

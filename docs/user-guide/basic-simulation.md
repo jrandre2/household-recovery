@@ -23,6 +23,8 @@ The simulation models disaster recovery as an agent-based model:
    - Business availability
    - Behavioral heuristics from research
 
+**Note:** RecovUS is enabled by default. The utility-based decision details below apply when RecovUS is disabled.
+
 ## Running Your First Simulation
 
 ### Command Line

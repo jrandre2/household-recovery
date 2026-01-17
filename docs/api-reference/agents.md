@@ -16,6 +16,9 @@ from household_recovery.agents import (
 ```python
 IncomeLevel = Literal['low', 'middle', 'high']
 ResilienceCategory = Literal['low', 'medium', 'high']
+PerceptionType = Literal['infrastructure', 'social', 'community']
+DamageSeverity = Literal['none', 'minor', 'moderate', 'severe', 'destroyed']
+RecoveryState = Literal['waiting', 'repairing', 'recovered', 'relocated']
 ```
 
 ---
@@ -41,6 +44,19 @@ Households are the primary agents that make recovery decisions based on:
 | `resilience_category` | `ResilienceCategory` | Categorical: 'low', 'medium', 'high' |
 | `recovery` | `float` | Current recovery level (0=not recovered, 1=fully) |
 | `recovery_history` | `list[float]` | Recovery values at each step |
+| `perception_type` | `PerceptionType` | RecovUS perception type |
+| `recovery_state` | `RecoveryState` | RecovUS recovery state |
+| `damage_severity` | `DamageSeverity` | RecovUS damage severity |
+| `repair_cost` | `float` | Estimated repair cost |
+| `is_habitable` | `bool` | Whether the home is habitable |
+| `insurance_payout` | `float` | Insurance resources |
+| `fema_ha_grant` | `float` | FEMA Housing Assistance grant |
+| `sba_loan_amount` | `float` | SBA loan amount |
+| `liquid_assets` | `float` | Liquid assets |
+| `cdbg_dr_allocation` | `float` | CDBG-DR allocation |
+| `temporary_housing_cost` | `float` | Temporary housing cost |
+| `home_value` | `float` | Estimated home value |
+| `decision_history` | `list[str]` | Decision actions per step |
 
 ### Class Methods
 
@@ -66,6 +82,9 @@ household = HouseholdAgent.generate_random(
 **Distribution Details:**
 - Income: Log-normal distribution (median ~$57k, mean ~$80k)
 - Resilience: Beta distribution (0-1, moderate-low average)
+
+When `recovus_config` is provided, RecovUS perception, damage, and financial attributes
+are generated alongside the core attributes.
 
 ### Instance Methods
 
@@ -111,6 +130,9 @@ new_recovery = household.decide_recovery(
 2. Aggregate boosts and extra recovery from matched heuristics
 3. Calculate proposed new recovery
 4. Accept if utility increases
+
+**Note:** This is the legacy utility-based path. When RecovUS is enabled, the
+simulation uses a `DecisionModel` to apply RecovUS logic instead.
 
 #### `record_state()`
 
@@ -216,6 +238,9 @@ Contains neighborhood-level aggregate information for recovery decisions.
 | `resilience_category` | `str` | 'medium' | Resilience category |
 | `household_income` | `float` | 60000.0 | Household income |
 | `income_level` | `str` | 'middle' | Income level category |
+| `time_step` | `int` | 0 | Current simulation step |
+| `months_since_disaster` | `int` | 0 | Months since disaster (1 step = 1 month) |
+| `avg_neighbor_recovered_binary` | `float` | 0.0 | % of neighbors fully recovered |
 
 ### Methods
 

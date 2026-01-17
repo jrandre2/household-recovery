@@ -126,6 +126,17 @@ ALLOWED_CTX_KEYS = frozenset({
     'resilience_category',      # 'low', 'medium', 'high'
     'household_income',         # Annual income (float)
     'income_level',             # 'low', 'middle', 'high'
+    'perception_type',          # RecovUS perception type
+    'damage_severity',          # RecovUS damage severity
+    'recovery_state',           # RecovUS recovery state
+    'is_feasible',              # Financial feasibility
+    'is_adequate',              # Community adequacy
+    'is_habitable',             # Habitability flag
+    'repair_cost',              # Estimated repair cost
+    'available_resources',      # Total available resources
+    'time_step',                # Current simulation step
+    'months_since_disaster',    # Months since disaster
+    'avg_neighbor_recovered_binary',  # % of neighbors fully recovered
 })
 ```
 

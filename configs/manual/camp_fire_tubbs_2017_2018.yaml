@@ -1,0 +1,8 @@
+simulation:
+  steps: 47
+  base_recovery_rate: 0.0019
+
+recovus:
+  insurance_penetration_rate: 0.84
+  sba_income_floor: 51396.0
+  transition_r2: 0.09

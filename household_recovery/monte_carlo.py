@@ -35,7 +35,7 @@ import numpy as np
 
 from .config import (
     SimulationConfig, APIConfig, ResearchConfig,
-    ThresholdConfig, InfrastructureConfig, NetworkConfig
+    ThresholdConfig, InfrastructureConfig, NetworkConfig, RecovUSConfig
 )
 from .simulation import SimulationEngine, SimulationResult
 from .heuristics import get_fallback_heuristics, Heuristic
@@ -187,10 +187,10 @@ def _run_single_simulation(args: tuple) -> SimulationResult:
     """
     Worker function for parallel simulation.
 
-    Takes a tuple of (config, heuristics, run_index, thresholds, infra_config, network_config)
+    Takes a tuple of (config, heuristics, run_index, thresholds, infra_config, network_config, recovus_config)
     to support multiprocessing.
     """
-    config, heuristics_data, run_idx, thresholds_dict, infra_dict, network_dict = args
+    config, heuristics_data, run_idx, thresholds_dict, infra_dict, network_dict, recovus_dict = args
 
     # Reconstruct heuristics (can't pickle lambdas across processes)
     from .heuristics import Heuristic
@@ -207,6 +207,7 @@ def _run_single_simulation(args: tuple) -> SimulationResult:
     thresholds = ThresholdConfig(**thresholds_dict) if thresholds_dict else ThresholdConfig()
     infra_config = InfrastructureConfig(**infra_dict) if infra_dict else InfrastructureConfig()
     network_config = NetworkConfig(**network_dict) if network_dict else NetworkConfig()
+    recovus_config = RecovUSConfig(**recovus_dict) if recovus_dict else RecovUSConfig()
 
     # Set unique seed for this run
     run_config = config.copy(random_seed=run_idx if config.random_seed is None else config.random_seed + run_idx)
@@ -217,6 +218,7 @@ def _run_single_simulation(args: tuple) -> SimulationResult:
         thresholds=thresholds,
         infra_config=infra_config,
         network_config=network_config,
+        recovus_config=recovus_config,
     )
     return engine.run()
 
@@ -233,6 +235,7 @@ def run_monte_carlo(
     thresholds: ThresholdConfig | None = None,
     infra_config: InfrastructureConfig | None = None,
     network_config: NetworkConfig | None = None,
+    recovus_config: RecovUSConfig | None = None,
 ) -> MonteCarloResults:
     """
     Run multiple simulations and aggregate results.
@@ -249,6 +252,7 @@ def run_monte_carlo(
         thresholds: Configuration for income/resilience classification
         infra_config: Configuration for infrastructure parameters
         network_config: Configuration for network connection parameters
+        recovus_config: Configuration for RecovUS decision model
 
     Returns:
         MonteCarloResults with aggregated statistics
@@ -262,6 +266,8 @@ def run_monte_carlo(
         infra_config = InfrastructureConfig()
     if network_config is None:
         network_config = NetworkConfig()
+    if recovus_config is None:
+        recovus_config = RecovUSConfig()
 
     # Build heuristics once (shared across all runs)
     if heuristics is None:
@@ -272,10 +278,12 @@ def run_monte_carlo(
                 groq_api_key=api_config.groq_api_key,
                 query=research_config.default_query if research_config else "disaster recovery",
                 num_papers=research_config.num_papers if research_config else 5,
-                cache_dir=research_config.cache_dir if research_config else None
+                cache_dir=research_config.cache_dir if research_config else None,
+                use_recovus=recovus_config.enabled,
+                us_only=research_config.us_only if research_config else False,
             )
         else:
-            heuristics = get_fallback_heuristics()
+            heuristics = get_fallback_heuristics(use_recovus=recovus_config.enabled)
 
     logger.info(f"Using {len(heuristics)} heuristics for all runs")
 
@@ -293,6 +301,7 @@ def run_monte_carlo(
     thresholds_dict = asdict(thresholds)
     infra_dict = asdict(infra_config)
     network_dict = asdict(network_config)
+    recovus_dict = asdict(recovus_config)
 
     results = []
 
@@ -301,7 +310,7 @@ def run_monte_carlo(
         logger.info(f"Running in parallel with {max_workers or 'default'} workers")
 
         args_list = [
-            (config, heuristics_data, i, thresholds_dict, infra_dict, network_dict)
+            (config, heuristics_data, i, thresholds_dict, infra_dict, network_dict, recovus_dict)
             for i in range(n_runs)
         ]
 
@@ -333,6 +342,7 @@ def run_monte_carlo(
                 thresholds=thresholds,
                 infra_config=infra_config,
                 network_config=network_config,
+                recovus_config=recovus_config,
             )
             result = engine.run()
             results.append(result)

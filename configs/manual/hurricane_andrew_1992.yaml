@@ -1,0 +1,4 @@
+recovus:
+  fema_ha_max: 5000.0
+  insurance_penetration_rate: 0.93
+  sba_uptake_rate: 0.07

@@ -91,9 +91,12 @@ This simulation combines three paradigms:
 
 ## Key Design Decisions
 
-### 1. Utility-Based Agent Decisions
+### 1. Decision Models (RecovUS Default)
 
-Households don't just recover - they evaluate whether recovery improves their situation:
+RecovUS is enabled by default and uses feasibility, adequacy, and a state machine for decisions.
+The utility-based model remains available for backward compatibility.
+
+Utility-based households evaluate whether recovery improves their situation:
 
 ```python
 utility = self_weight * own_recovery
@@ -113,6 +116,9 @@ if heuristic.evaluate(context):
     boost *= heuristic.action['boost']  # e.g., 1.5 or 0.6
     extra += heuristic.action.get('extra_recovery', 0)
 ```
+
+When RecovUS is enabled, heuristics use `modify_r0`/`modify_r1`/`modify_r2` multipliers
+and `modify_adq_*` adjustments instead of `boost`/`extra_recovery`.
 
 ### 3. Safe Expression Evaluation
 

@@ -9,13 +9,13 @@ Dependencies and import structure.
                                 │
                                 ▼
                           simulation.py
-                         ╱      │      ╲
-                        ╱       │       ╲
-                       ▼        ▼        ▼
-                  config.py  network.py  heuristics.py
-                       │        │            │
-                       │        ▼            ▼
-                       │    agents.py    safe_eval.py
+                         ╱   │     │     ╲
+                        ╱    │     │      ╲
+                       ▼     ▼     ▼       ▼
+                  config.py  network.py  heuristics.py  decision_model.py
+                       │        │            │             │
+                       │        ▼            ▼             ▼
+                       │    agents.py    safe_eval.py    recovus/
                        │        │
                        └────────┴────────────┐
                                              │
@@ -64,8 +64,27 @@ from .heuristics import build_knowledge_base, ...
 **Imports:**
 ```python
 from .config import SimulationConfig, APIConfig, ...
+from .decision_model import create_decision_model
 from .network import CommunityNetwork
 from .heuristics import Heuristic, build_knowledge_base, ...
+```
+
+#### `decision_model.py`
+- `DecisionModel` protocol
+- `UtilityDecisionModel` and `RecovUSDecisionModel` implementations
+- `create_decision_model()` factory
+
+**Imports:**
+```python
+from .recovus import RecoveryStateMachine, TransitionProbabilities, CommunityAdequacyCriteria  # RecovUS
+```
+
+#### `recovus/`
+- RecovUS decision model implementation (perception, financial, community, state machine)
+
+**Imports:** (package-level)
+```python
+from .state_machine import RecoveryStateMachine
 ```
 
 ### Agent System
@@ -88,8 +107,9 @@ from .heuristics import Heuristic  # TYPE_CHECKING only
 **Imports:**
 ```python
 from .agents import HouseholdAgent, InfrastructureNode, BusinessNode, SimulationContext
-from .config import NetworkType, ThresholdConfig, InfrastructureConfig, NetworkConfig
+from .config import NetworkType, ThresholdConfig, InfrastructureConfig, NetworkConfig, RecovUSConfig
 from .heuristics import Heuristic  # TYPE_CHECKING only
+from .decision_model import DecisionModel  # TYPE_CHECKING only
 ```
 
 ### RAG Pipeline

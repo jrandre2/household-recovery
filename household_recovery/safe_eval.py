@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 # Whitelist of allowed context keys (variables the LLM can reference)
 ALLOWED_CTX_KEYS = frozenset({
+    # Original context keys
     'avg_neighbor_recovery',
     'avg_infra_func',
     'avg_business_avail',
@@ -37,6 +38,19 @@ ALLOWED_CTX_KEYS = frozenset({
     'resilience_category',
     'household_income',
     'income_level',
+
+    # RecovUS context keys
+    'perception_type',  # 'infrastructure', 'social', 'community'
+    'damage_severity',  # 'none', 'minor', 'moderate', 'severe', 'destroyed'
+    'recovery_state',  # 'waiting', 'repairing', 'recovered', 'relocated'
+    'is_feasible',  # bool: can household afford repairs
+    'is_adequate',  # bool: is community adequate for this perception type
+    'is_habitable',  # bool: can household live in home
+    'repair_cost',  # float: cost to repair home
+    'available_resources',  # float: total financial resources available
+    'time_step',  # int: current simulation step
+    'months_since_disaster',  # int: months elapsed since disaster
+    'avg_neighbor_recovered_binary',  # float: % of neighbors fully recovered
 })
 
 # Allowed comparison operators

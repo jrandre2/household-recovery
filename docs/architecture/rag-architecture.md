@@ -7,7 +7,7 @@ Deep dive into the Retrieval-Augmented Generation pipeline.
 The RAG pipeline grounds simulation behavior in academic research by:
 
 1. **Retrieving** relevant papers from Google Scholar or local PDFs
-2. **Augmenting** an LLM prompt with paper abstracts
+2. **Augmenting** an LLM prompt with paper text (Scholar abstracts; PDF full-text excerpts when enabled)
 3. **Generating** structured heuristics from the research
 
 ## Pipeline Components
@@ -90,16 +90,19 @@ class ScholarRetriever:
 **Implementation:**
 ```python
 class LocalPaperRetriever:
-    def load_papers(self, keywords: list[str], max_papers: int) -> list[LocalPaper]:
+    def load_papers(self, keywords: list[str], max_papers: int,
+                    max_pages: int | None, us_only: bool) -> list[LocalPaper]:
         # 1. Find matching PDFs
         pdf_paths = self.filter_relevant(keywords, max_papers)
 
         # 2. Extract text from each
         papers = []
         for path in pdf_paths:
-            text = self.reader.extract_text(path)
+            text = self.reader.extract_text(path, max_pages=max_pages)
             abstract = extract_abstract(text)
-            papers.append(LocalPaper(title=path.stem, abstract=abstract, ...))
+            if us_only and not is_us_based(text):
+                continue
+            papers.append(LocalPaper(title=path.stem, abstract=abstract, full_text=text, ...))
 
         return papers
 ```
@@ -147,7 +150,7 @@ Output format:
   ...
 ]
 
-Abstracts:
+Text excerpts:
 {abstracts}"""
 ```
 

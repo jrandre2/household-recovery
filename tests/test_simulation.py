@@ -147,8 +147,16 @@ class TestSimulationEngine:
         heuristics = engine.build_knowledge_base()
 
         assert len(heuristics) > 0
-        # Should be fallback heuristics
-        assert any("Neighbor influence" in h.source for h in heuristics)
+        # Should be fallback heuristics for the configured mode
+        expected = get_fallback_heuristics(use_recovus=engine.recovus_config.enabled)
+
+        def signature(items):
+            return sorted(
+                (h.condition_str, tuple(sorted(h.action.items())), h.source)
+                for h in items
+            )
+
+        assert signature(heuristics) == signature(expected)
 
     def test_build_knowledge_base_with_provided_heuristics(self, sample_sim_config, sample_heuristics):
         """Test that provided heuristics are used."""

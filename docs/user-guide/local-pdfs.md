@@ -38,11 +38,16 @@ from household_recovery.heuristics import build_knowledge_base_from_pdfs
 heuristics = build_knowledge_base_from_pdfs(
     pdf_dir="/path/to/papers",
     groq_api_key="YOUR_GROQ_KEY",
-    num_papers=5
+    num_papers=5,
+    us_only=True,
+    use_full_text=True,
+    pdf_max_pages=None
 )
 
 print(f"Extracted {len(heuristics)} heuristics")
 ```
+
+Tip: Use `pdf_max_pages` to limit pages per PDF for faster runs (set to `None` for full documents).
 
 ## Organizing Your Papers
 
@@ -99,6 +104,19 @@ heuristics = build_knowledge_base_from_pdfs(
 )
 ```
 
+## US-Only Filtering
+
+Filter to US-based studies when loading PDFs:
+
+```python
+heuristics = build_knowledge_base_from_pdfs(
+    pdf_dir="/path/to/papers",
+    groq_api_key="YOUR_KEY",
+    num_papers=5,
+    us_only=True
+)
+```
+
 ## Working with the PDF Retriever
 
 ### List Available Papers
@@ -125,7 +143,9 @@ print(f"Found {len(relevant)} relevant papers")
 ```python
 papers = retriever.load_papers(
     keywords=['recovery'],
-    max_papers=3
+    max_papers=3,
+    max_pages=10,
+    us_only=True
 )
 
 for paper in papers:
@@ -135,9 +155,13 @@ for paper in papers:
     print()
 ```
 
-## Abstract Extraction
+## Text and Abstract Extraction
 
-The system automatically extracts abstracts from PDFs:
+The retriever extracts full text (optionally limited by `max_pages`) and derives an abstract for quick inspection.
+By default, `build_knowledge_base_from_pdfs()` uses full-text excerpts; set `use_full_text=False` to use
+extracted abstracts instead.
+
+Abstract extraction behavior:
 
 1. Looks for "Abstract" or "Summary" section markers
 2. Finds text between abstract marker and introduction
@@ -150,6 +174,9 @@ from household_recovery.pdf_retrieval import PDFReader, extract_abstract
 
 reader = PDFReader()
 text = reader.extract_text("paper.pdf", max_pages=5)
+
+# Or read the full document
+full_text = reader.extract_text("paper.pdf", max_pages=None)
 
 abstract = extract_abstract(text, max_length=2000)
 print(abstract)
@@ -178,6 +205,10 @@ With `prefer_local=True`:
 1. Try local PDFs
 2. If no heuristics extracted, try Google Scholar
 3. If still nothing, use fallback heuristics
+
+CLI equivalents:
+- `--prefer-scholar` to try Scholar first
+- `--fallback-only` to skip RAG and use fallback heuristics
 
 ## Complete Example
 
@@ -250,7 +281,7 @@ pip install pypdf
 
 1. **Curate your library** - Use papers specifically about disaster recovery
 2. **Name files descriptively** - Helps keyword filtering
-3. **Check abstracts** - Ensure papers have clear, extractable abstracts
+3. **Check extracted text** - Ensure PDFs are readable and contain relevant sections
 4. **Pre-process once** - Extract heuristics once and save for reuse
 5. **Combine sources** - Use hybrid mode for best coverage
 

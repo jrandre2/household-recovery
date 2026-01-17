@@ -20,13 +20,15 @@ import numpy as np
 
 from .config import (
     SimulationConfig, APIConfig, ResearchConfig,
-    ThresholdConfig, InfrastructureConfig, NetworkConfig
+    ThresholdConfig, InfrastructureConfig, NetworkConfig, RecovUSConfig
 )
 from .network import CommunityNetwork
 from .heuristics import (
     Heuristic, build_knowledge_base, get_fallback_heuristics,
-    ExtractedParameters, ParameterExtractor
+    get_recovus_fallback_heuristics,
+    ExtractedParameters, RecovUSExtractedParameters, ParameterExtractor
 )
+from .decision_model import DecisionModel, create_decision_model
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +48,9 @@ class ParameterMerger:
         sim_config: SimulationConfig,
         thresholds: ThresholdConfig,
         extracted: ExtractedParameters | None = None,
-        confidence_threshold: float = 0.7
+        confidence_threshold: float = 0.7,
+        recovus_config: RecovUSConfig | None = None,
+        recovus_extracted: RecovUSExtractedParameters | None = None,
     ):
         """
         Initialize the parameter merger.
@@ -56,11 +60,15 @@ class ParameterMerger:
             thresholds: Threshold configuration from config file
             extracted: Parameters extracted from research papers
             confidence_threshold: Minimum confidence to use RAG-extracted values
+            recovus_config: RecovUS configuration from config file
+            recovus_extracted: RecovUS parameters extracted from research papers
         """
         self.sim_config = sim_config
         self.thresholds = thresholds
         self.extracted = extracted or ExtractedParameters()
         self.confidence_threshold = confidence_threshold
+        self.recovus_config = recovus_config or RecovUSConfig()
+        self.recovus_extracted = recovus_extracted or RecovUSExtractedParameters()
         self._merge_log: list[tuple[str, float, str]] = []  # (param, value, source)
 
     def get_base_recovery_rate(self) -> tuple[float, str]:
@@ -206,6 +214,91 @@ class ParameterMerger:
         for param, value, source in self._merge_log:
             logger.info(f"  {param}: {value} (from {source})")
 
+    def get_recovus_config(self) -> tuple[RecovUSConfig, list[tuple[str, Any, str]]]:
+        """
+        Get RecovUS configuration with RAG-extracted overrides applied.
+
+        Applies RAG-extracted parameters to RecovUS config if confidence
+        meets threshold.
+
+        Returns:
+            Tuple of (merged RecovUSConfig, list of (param, value, source) tuples)
+        """
+        from dataclasses import replace
+
+        config = self.recovus_config
+        merge_log: list[tuple[str, Any, str]] = []
+
+        # Apply RAG-extracted parameters if confidence meets threshold
+        config = self.recovus_extracted.apply_to_config(
+            config, self.confidence_threshold
+        )
+
+        # Track what was merged
+        extracted = self.recovus_extracted
+
+        # Perception distribution
+        if (extracted.perception_infrastructure is not None and
+            extracted.perception_confidence is not None and
+            extracted.perception_confidence >= self.confidence_threshold):
+            merge_log.append((
+                "perception_distribution",
+                f"({extracted.perception_infrastructure:.0%}, {extracted.perception_social:.0%}, {extracted.perception_community:.0%})",
+                f"RAG-extracted (confidence={extracted.perception_confidence:.2f})"
+            ))
+        else:
+            merge_log.append((
+                "perception_distribution",
+                f"({config.perception_infrastructure:.0%}, {config.perception_social:.0%}, {config.perception_community:.0%})",
+                "config/default"
+            ))
+
+        # Adequacy thresholds
+        if (extracted.adequacy_infrastructure is not None and
+            extracted.adequacy_confidence is not None and
+            extracted.adequacy_confidence >= self.confidence_threshold):
+            merge_log.append((
+                "adequacy_thresholds",
+                f"(infra={extracted.adequacy_infrastructure:.2f}, nbr={extracted.adequacy_neighbor:.2f}, cas={extracted.adequacy_community_assets:.2f})",
+                f"RAG-extracted (confidence={extracted.adequacy_confidence:.2f})"
+            ))
+        else:
+            merge_log.append((
+                "adequacy_thresholds",
+                f"(infra={config.adequacy_infrastructure:.2f}, nbr={config.adequacy_neighbor:.2f}, cas={config.adequacy_community_assets:.2f})",
+                "config/default"
+            ))
+
+        # Transition probabilities
+        transition_extracted = (
+            extracted.transition_confidence is not None
+            and extracted.transition_confidence >= self.confidence_threshold
+            and any(
+                v is not None
+                for v in [
+                    extracted.transition_r0,
+                    extracted.transition_r1,
+                    extracted.transition_r2,
+                    extracted.transition_relocate,
+                ]
+            )
+        )
+        transition_source = (
+            f"RAG-extracted (confidence={extracted.transition_confidence:.2f})"
+            if transition_extracted
+            else "config/default"
+        )
+        merge_log.append((
+            "transition_probabilities",
+            (
+                f"(r0={config.transition_r0:.2f}, r1={config.transition_r1:.2f}, "
+                f"r2={config.transition_r2:.2f}, relocate={config.transition_relocate:.2f})"
+            ),
+            transition_source,
+        ))
+
+        return config, merge_log
+
 
 @dataclass
 class SimulationResult:
@@ -330,6 +423,10 @@ class SimulationEngine:
     Usage:
         engine = SimulationEngine(config, api_config)
         result = engine.run()
+
+    With RecovUS enabled:
+        engine = SimulationEngine(config, recovus_config=RecovUSConfig(enabled=True))
+        result = engine.run()
     """
 
     def __init__(
@@ -341,6 +438,7 @@ class SimulationEngine:
         thresholds: ThresholdConfig | None = None,
         infra_config: InfrastructureConfig | None = None,
         network_config: NetworkConfig | None = None,
+        recovus_config: RecovUSConfig | None = None,
     ):
         """
         Initialize the simulation engine.
@@ -353,6 +451,7 @@ class SimulationEngine:
             thresholds: Configuration for income/resilience classification
             infra_config: Configuration for infrastructure parameters
             network_config: Configuration for network connection parameters
+            recovus_config: Configuration for RecovUS decision model
         """
         self.config = config
         self.api_config = api_config or APIConfig()
@@ -362,6 +461,9 @@ class SimulationEngine:
         self.thresholds = thresholds or ThresholdConfig()
         self.infra_config = infra_config or InfrastructureConfig()
         self.network_config = network_config or NetworkConfig()
+        self.recovus_config = recovus_config or RecovUSConfig()
+        self._decision_model: DecisionModel | None = None
+        self._rng: np.random.Generator | None = None
 
     def build_knowledge_base(self) -> list[Heuristic]:
         """
@@ -369,6 +471,9 @@ class SimulationEngine:
 
         If heuristics were provided at init, returns those.
         Otherwise, runs the RAG pipeline or uses fallback.
+
+        When RecovUS is enabled, uses RecovUS-specific fallback heuristics
+        that modify transition probabilities instead of boost/extra_recovery.
         """
         if self._heuristics is not None:
             logger.info(f"Using {len(self._heuristics)} pre-built heuristics")
@@ -381,10 +486,17 @@ class SimulationEngine:
                 groq_api_key=self.api_config.groq_api_key,
                 query=self.research_config.default_query,
                 num_papers=self.research_config.num_papers,
-                cache_dir=self.research_config.cache_dir
+                cache_dir=self.research_config.cache_dir,
+                use_recovus=self.recovus_config.enabled,
+                us_only=self.research_config.us_only,
             )
             if heuristics:
                 return heuristics
+
+        # Use RecovUS-specific fallback heuristics if RecovUS is enabled
+        if self.recovus_config.enabled:
+            logger.info("Using RecovUS fallback heuristics")
+            return get_recovus_fallback_heuristics()
 
         logger.info("Using fallback heuristics")
         return get_fallback_heuristics()
@@ -401,8 +513,43 @@ class SimulationEngine:
             thresholds=self.thresholds,
             infra_config=self.infra_config,
             network_config=self.network_config,
+            recovus_config=self.recovus_config,
         )
+        # Store the rng for decision model initialization
+        self._rng = self._network.rng
         return self._network
+
+    def _create_decision_model(self) -> DecisionModel:
+        """Create the appropriate decision model based on configuration."""
+        if self.recovus_config.enabled:
+            from .recovus import TransitionProbabilities, CommunityAdequacyCriteria
+
+            probs = TransitionProbabilities(
+                r0=self.recovus_config.transition_r0,
+                r1=self.recovus_config.transition_r1,
+                r2=self.recovus_config.transition_r2,
+                relocate_when_infeasible=self.recovus_config.transition_relocate,
+            )
+            criteria = CommunityAdequacyCriteria(
+                infrastructure=self.recovus_config.adequacy_infrastructure,
+                neighbor=self.recovus_config.adequacy_neighbor,
+                community_assets=self.recovus_config.adequacy_community_assets,
+            )
+
+            logger.info(
+                f"Creating RecovUS decision model with r0={probs.r0:.2f}, "
+                f"r1={probs.r1:.2f}, r2={probs.r2:.2f}"
+            )
+
+            return create_decision_model(
+                model_type='recovus',
+                rng=self._rng,
+                probabilities=probs,
+                criteria=criteria,
+            )
+        else:
+            logger.info("Creating utility-based decision model")
+            return create_decision_model(model_type='utility')
 
     def run(self, progress_callback: callable | None = None) -> SimulationResult:
         """
@@ -425,6 +572,18 @@ class SimulationEngine:
         # Create network
         network = self.setup_network()
 
+        # Create decision model (after network so we have rng)
+        self._decision_model = self._create_decision_model()
+
+        # Log RecovUS status
+        if self.recovus_config.enabled:
+            logger.info(
+                f"RecovUS enabled: perception distribution = "
+                f"({self.recovus_config.perception_infrastructure:.0%} infra, "
+                f"{self.recovus_config.perception_social:.0%} social, "
+                f"{self.recovus_config.perception_community:.0%} community)"
+            )
+
         # Record initial state
         recovery_history = [network.average_recovery()]
         for hh in network.households.values():
@@ -437,11 +596,23 @@ class SimulationEngine:
             avg_recovery = network.step(
                 heuristics=heuristics,
                 base_recovery_rate=self.config.base_recovery_rate,
-                utility_weights=self.config.utility_weights
+                utility_weights=self.config.utility_weights,
+                decision_model=self._decision_model,
+                time_step=step,
             )
             recovery_history.append(avg_recovery)
 
-            logger.info(f"Step {step}: avg_recovery = {avg_recovery:.3f}")
+            # Log recovery state distribution for RecovUS
+            if self.recovus_config.enabled and step % 5 == 0:
+                state_counts = {}
+                for hh in network.households.values():
+                    state_counts[hh.recovery_state] = state_counts.get(hh.recovery_state, 0) + 1
+                logger.info(
+                    f"Step {step}: avg_recovery = {avg_recovery:.3f}, "
+                    f"states = {state_counts}"
+                )
+            else:
+                logger.info(f"Step {step}: avg_recovery = {avg_recovery:.3f}")
 
             if progress_callback:
                 progress_callback(step, avg_recovery)

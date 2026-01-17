@@ -1,0 +1,8 @@
+simulation:
+  steps: 36
+  base_recovery_rate: 0.0139
+
+recovus:
+  transition_r0: 0.1867
+  transition_r2: 0.6618
+  sba_income_floor: 20000.0

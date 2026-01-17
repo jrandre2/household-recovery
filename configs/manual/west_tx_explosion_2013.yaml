@@ -1,0 +1,8 @@
+simulation:
+  steps: 36
+  base_recovery_rate: 0.0228
+
+recovus:
+  fema_ha_max: 35000.0
+  transition_r2: 0.82
+  transition_relocate: 0.11

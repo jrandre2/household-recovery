@@ -25,7 +25,7 @@ python -m household_recovery --households 50 --steps 20
 Save plots to an output directory:
 
 ```bash
-python -m household_recovery --households 30 --steps 15 --output-dir ./results
+python -m household_recovery --households 30 --steps 15 --output ./results
 ```
 
 ### Monte Carlo Analysis

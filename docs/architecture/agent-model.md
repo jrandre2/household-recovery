@@ -46,6 +46,8 @@ Represents local economic activity.
 
 ## Decision Process
 
+**Note:** RecovUS is enabled by default. The utility-based decision flow below applies when RecovUS is disabled.
+
 ### 1. Context Building
 
 For each household, the network builds a `SimulationContext`:
@@ -162,6 +164,21 @@ Adds directly to recovery increment:
 increment = base_rate * boost + extra_recovery
 # With base_rate=0.1, boost=1.5, extra=0.05:
 # increment = 0.1 * 1.5 + 0.05 = 0.2
+```
+
+## RecovUS Decision Model (Default)
+
+RecovUS replaces utility-based decisions with a feasibility/adequacy state machine:
+
+1. **Financial feasibility**: resources >= repair + temporary housing costs
+2. **Community adequacy**: perception-specific thresholds for infrastructure, neighbors, or businesses
+3. **State transitions**: probabilistic moves between waiting, repairing, recovered, relocated
+4. **Heuristic modifiers**: actions adjust transition probabilities and adequacy thresholds
+
+Example RecovUS action keys:
+
+```python
+{'modify_r1': 1.1, 'modify_adq_nbr': -0.05}
 ```
 
 ## Network Effects

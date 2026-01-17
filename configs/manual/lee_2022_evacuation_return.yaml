@@ -1,0 +1,7 @@
+simulation:
+  steps: 3
+  base_recovery_rate: 0.3333
+
+recovus:
+  transition_r2: 0.80
+  transition_relocate: 0.20

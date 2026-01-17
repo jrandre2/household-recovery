@@ -21,7 +21,7 @@ from household_recovery.heuristics import (
 
 This module implements Retrieval-Augmented Generation:
 1. **RETRIEVE**: Fetch relevant academic papers from Google Scholar
-2. **AUGMENT**: Use paper abstracts as context for the LLM
+2. **AUGMENT**: Use paper text as context (Scholar abstracts; PDF full-text excerpts when enabled)
 3. **GENERATE**: LLM extracts actionable heuristics from research
 
 ---
@@ -37,7 +37,7 @@ Heuristics have the form: `IF <condition> THEN <action>`
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | `condition_str` | `str` | Python expression like `ctx['avg_neighbor_recovery'] > 0.5` |
-| `action` | `dict[str, float]` | Action to take: `{'boost': 1.5}` or `{'extra_recovery': 0.1}` |
+| `action` | `dict[str, float]` | Action to take (utility: `{'boost': 1.5}` / `{'extra_recovery': 0.1}`; RecovUS: `{'modify_r1': 1.1}`, `{'modify_adq_nbr': -0.05}`) |
 | `source` | `str` | Source of the heuristic (paper or 'fallback') |
 
 ### Methods
@@ -143,7 +143,7 @@ papers = retriever.search(
 
 ## HeuristicExtractor
 
-Extracts behavioral heuristics from paper abstracts using LLM.
+Extracts behavioral heuristics from paper text using LLM.
 
 ### Constructor
 
@@ -160,7 +160,7 @@ extractor = HeuristicExtractor(
 
 #### `extract(papers) -> list[Heuristic]`
 
-Extract heuristics from paper abstracts.
+Extract heuristics from paper text.
 
 ```python
 heuristics = extractor.extract(papers)
@@ -172,7 +172,7 @@ for h in heuristics:
 
 ## ParameterExtractor
 
-Extracts numeric simulation parameters from paper abstracts.
+Extracts numeric simulation parameters from paper text.
 
 ### Constructor
 
@@ -211,7 +211,8 @@ heuristics = build_knowledge_base(
     groq_api_key="YOUR_GROQ_KEY",
     query="disaster recovery heuristics",
     num_papers=5,
-    cache_dir=Path(".cache/scholar")
+    cache_dir=Path(".cache/scholar"),
+    us_only=True
 )
 ```
 
@@ -219,12 +220,17 @@ heuristics = build_knowledge_base(
 
 Build knowledge base from local PDF files.
 
+When `use_full_text=True` (default), the extractor receives full-text excerpts from PDFs; set it to `False` to use extracted abstracts only.
+
 ```python
 heuristics = build_knowledge_base_from_pdfs(
     pdf_dir=Path("~/research/papers"),
     groq_api_key="YOUR_GROQ_KEY",
     keywords=['recovery', 'disaster'],
-    num_papers=5
+    num_papers=5,
+    us_only=True,
+    use_full_text=True,
+    pdf_max_pages=None
 )
 ```
 
@@ -239,7 +245,10 @@ heuristics = build_knowledge_base_hybrid(
     groq_api_key="YOUR_GROQ_KEY",
     scholar_query="disaster recovery",
     num_papers=5,
-    prefer_local=True
+    prefer_local=True,
+    us_only=True,
+    use_full_text=True,
+    pdf_max_pages=None
 )
 ```
 
@@ -276,6 +285,17 @@ ALLOWED_CTX_KEYS = {
     'resilience_category',      # 'low', 'medium', 'high'
     'household_income',         # Annual income (float)
     'income_level',             # 'low', 'middle', 'high'
+    'perception_type',          # RecovUS perception type
+    'damage_severity',          # RecovUS damage severity
+    'recovery_state',           # RecovUS recovery state
+    'is_feasible',              # Financial feasibility
+    'is_adequate',              # Community adequacy
+    'is_habitable',             # Habitability flag
+    'repair_cost',              # Estimated repair cost
+    'available_resources',      # Total available resources
+    'time_step',                # Current simulation step
+    'months_since_disaster',    # Months since disaster
+    'avg_neighbor_recovered_binary',  # % of neighbors fully recovered
 }
 ```
 

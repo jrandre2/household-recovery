@@ -30,7 +30,7 @@ Represents a locally stored academic paper.
 | `title` | `str` | Paper title (from filename) |
 | `abstract` | `str` | Extracted abstract (~2000 chars) |
 | `filepath` | `Path` | Path to PDF file |
-| `full_text` | `str` | Full extracted text |
+| `full_text` | `str` | Full extracted text (may be truncated by max_pages) |
 
 ### Properties
 
@@ -65,12 +65,18 @@ text = reader.extract_text(
     filepath=Path("paper.pdf"),
     max_pages=5  # Only read first 5 pages for efficiency
 )
+
+# Full document
+full_text = reader.extract_text(
+    filepath=Path("paper.pdf"),
+    max_pages=None
+)
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `filepath` | `Path` | required | Path to PDF file |
-| `max_pages` | `int` | 5 | Maximum pages to read |
+| `max_pages` | `int` | 5 | Maximum pages to read (None = all pages) |
 
 ---
 
@@ -111,7 +117,7 @@ papers = retriever.filter_relevant(
 | `keywords` | `list[str]` | `None` | Keywords to match (case-insensitive) |
 | `max_papers` | `int` | 10 | Maximum papers to return |
 
-#### `load_papers(pdf_paths=None, keywords=None, max_papers=5) -> list[LocalPaper]`
+#### `load_papers(pdf_paths=None, keywords=None, max_papers=5, max_pages=5, us_only=False) -> list[LocalPaper]`
 
 Load papers from PDF files.
 
@@ -131,6 +137,8 @@ for paper in papers:
 | `pdf_paths` | `list[Path]` | `None` | Specific paths to load |
 | `keywords` | `list[str]` | `None` | Filter by filename |
 | `max_papers` | `int` | 5 | Maximum to load |
+| `max_pages` | `int | None` | 5 | Max pages per PDF (None = all pages) |
+| `us_only` | `bool` | False | Filter to US-based studies |
 
 ---
 
@@ -156,11 +164,20 @@ Convenience function to load disaster recovery papers.
 ```python
 papers = load_recovery_papers(
     pdf_dir="/path/to/papers",
-    max_papers=5
+    max_papers=5,
+    max_pages=None,
+    us_only=True
 )
 ```
 
 First tries to find papers matching disaster recovery keywords, then falls back to any available PDFs.
+
+---
+
+## US-Based Filtering
+
+Pass `us_only=True` to `load_papers()` or `load_recovery_papers()` to filter to US-based studies. This performs
+a lightweight scan for US indicators (e.g., "United States", FEMA, state names) in the filename and extracted text.
 
 ---
 
@@ -209,7 +226,10 @@ heuristics = build_knowledge_base_from_pdfs(
     pdf_dir="/home/user/research/disaster-papers",
     groq_api_key="YOUR_GROQ_KEY",
     keywords=['recovery', 'household', 'community'],
-    num_papers=5
+    num_papers=5,
+    us_only=True,
+    use_full_text=True,
+    pdf_max_pages=None
 )
 
 print(f"Extracted {len(heuristics)} heuristics from PDFs")

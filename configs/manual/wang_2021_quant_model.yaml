@@ -1,0 +1,7 @@
+simulation:
+  steps: 48
+  base_recovery_rate: 0.0286
+
+recovus:
+  insurance_penetration_rate: 0.85
+  transition_r2: 0.9861

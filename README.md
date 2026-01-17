@@ -5,6 +5,7 @@ A RAG-enhanced agent-based model for simulating community disaster recovery. Thi
 ## Features
 
 - **Agent-Based Modeling**: Simulate household, infrastructure, and business recovery dynamics
+- **RecovUS Decision Model**: Sophisticated household decisions based on financial feasibility and community adequacy
 - **RAG-Enhanced Heuristics**: Extract behavioral rules from academic papers via LLM
 - **Automatic Parameter Extraction**: Extract numeric parameters (recovery rates, thresholds) from research
 - **YAML/JSON Configuration**: Externalize all parameters in config files
@@ -127,7 +128,9 @@ The simulation uses academic research to generate behavioral heuristics and extr
 
 ### Heuristic Extraction
 
-The system extracts IF-THEN behavioral rules from paper abstracts:
+The system extracts IF-THEN behavioral rules from paper text:
+- Google Scholar uses abstracts
+- Local PDFs use full-text excerpts by default (configurable)
 
 ```
 IF neighbors mostly recovered THEN boost recovery by 50%
@@ -148,6 +151,42 @@ The enhanced RAG system also extracts numeric parameters:
 - **Google Scholar**: Fetch papers via SerpAPI
 - **Local PDFs**: Process your own research library
 - **Hybrid mode**: Combine both sources
+- **US-only filter**: Enabled by default for Scholar and local PDFs (set `ResearchConfig.us_only=False` to disable)
+
+## RecovUS Decision Model
+
+The RecovUS model (Moradi & Nejat, 2020) provides sophisticated household recovery decisions based on:
+
+1. **Perception Types (ASNA Index)**: Households prioritize infrastructure (65%), social networks (31%), or community assets (4%)
+2. **Financial Feasibility**: 5-resource model (insurance, FEMA, SBA loans, liquid assets, CDBG-DR)
+3. **Community Adequacy**: Thresholds for infrastructure, neighbor recovery, and business availability
+
+### Quick RecovUS Example
+
+```python
+from household_recovery import SimulationEngine, SimulationConfig
+from household_recovery.config import RecovUSConfig
+
+# Configure RecovUS model
+recovus_config = RecovUSConfig(
+    enabled=True,
+    perception_infrastructure=0.65,
+    perception_social=0.31,
+    perception_community=0.04,
+    transition_r0=0.35,  # Repair when only feasible
+    transition_r1=0.95,  # Repair when feasible + adequate
+)
+
+config = SimulationConfig(num_households=50, steps=20)
+engine = SimulationEngine(config, recovus_config=recovus_config)
+result = engine.run()
+
+# Check state distribution
+for hh in engine._network.households.values():
+    print(f"{hh.id}: {hh.recovery_state}, perception={hh.perception_type}")
+```
+
+For full RecovUS documentation, see [docs/user-guide/recovus.md](docs/user-guide/recovus.md).
 
 ## API Usage
 
@@ -216,11 +255,18 @@ household_recovery/
 ├── agents.py            # Agent classes (Household, Infrastructure, Business)
 ├── network.py           # Network creation and management
 ├── simulation.py        # Simulation engine and parameter merger
+├── decision_model.py    # Decision model protocol and implementations
 ├── heuristics.py        # RAG pipeline and parameter extraction
 ├── monte_carlo.py       # Multi-run analysis
 ├── safe_eval.py         # Secure expression evaluation
 ├── visualization.py     # Plotting and reports
-└── pdf_retrieval.py     # Local PDF processing
+├── pdf_retrieval.py     # Local PDF processing
+└── recovus/             # RecovUS decision model
+    ├── __init__.py      # Subpackage exports
+    ├── perception.py    # ASNA perception types
+    ├── financial.py     # Financial feasibility model
+    ├── community.py     # Community adequacy criteria
+    └── state_machine.py # Recovery state transitions
 ```
 
 ## Key Concepts
@@ -232,9 +278,11 @@ Agents (households) make autonomous decisions based on:
 - Neighborhood state (neighbor recovery, infrastructure)
 - Behavioral heuristics from research
 
-### Utility-Based Decisions
+### Decision Models
 
-Households evaluate proposed recovery levels using a utility function:
+The simulation supports two decision models:
+
+**Utility-Based (Legacy)**: Households evaluate proposed recovery levels using a utility function:
 
 ```
 utility = w_self * own_recovery
@@ -243,7 +291,12 @@ utility = w_self * own_recovery
         + w_business * business_availability
 ```
 
-Recovery only happens if utility increases.
+**RecovUS (Default)**: Sophisticated state machine with:
+
+- **States**: waiting → repairing → recovered (or relocated)
+- **Transitions**: Probabilistic (r0=35%, r1=95%, r2=95%)
+- **Feasibility**: Must have resources >= repair costs
+- **Adequacy**: Community must meet perception-specific thresholds
 
 ### Safe Expression Evaluation
 

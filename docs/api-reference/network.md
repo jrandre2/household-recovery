@@ -26,6 +26,7 @@ Contains:
 | `businesses` | `dict[str, BusinessNode]` | Business nodes by ID |
 | `rng` | `np.random.Generator` | Random number generator |
 | `infra_config` | `InfrastructureConfig` | Infrastructure configuration |
+| `recovus_config` | `RecovUSConfig` | RecovUS configuration |
 
 ### Class Methods
 
@@ -43,7 +44,8 @@ network = CommunityNetwork.create(
     seed=42,
     thresholds=ThresholdConfig(),
     infra_config=InfrastructureConfig(),
-    network_config=NetworkConfig()
+    network_config=NetworkConfig(),
+    recovus_config=RecovUSConfig()
 )
 ```
 
@@ -58,6 +60,7 @@ network = CommunityNetwork.create(
 | `thresholds` | `ThresholdConfig` | `None` | Classification thresholds |
 | `infra_config` | `InfrastructureConfig` | `None` | Infrastructure params |
 | `network_config` | `NetworkConfig` | `None` | Network params |
+| `recovus_config` | `RecovUSConfig` | `None` | RecovUS decision model config |
 
 ### Network Types
 
@@ -107,18 +110,22 @@ print(f"Avg neighbor recovery: {context.avg_neighbor_recovery:.3f}")
 print(f"Avg infra functionality: {context.avg_infra_func:.3f}")
 ```
 
-#### `step(heuristics, base_recovery_rate=0.1, utility_weights=None) -> float`
+#### `step(heuristics, base_recovery_rate=0.1, utility_weights=None, decision_model=None, time_step=0) -> float`
 
 Execute one simulation step.
 
 1. Each household makes a recovery decision
 2. Infrastructure and businesses update based on household recovery
 
+Provide `decision_model` to use RecovUS or custom decision logic; when omitted, the legacy utility-based decision runs.
+
 ```python
 avg_recovery = network.step(
     heuristics=heuristics,
     base_recovery_rate=0.1,
-    utility_weights={'self_recovery': 1.0, 'neighbor_recovery': 0.3}
+    utility_weights={'self_recovery': 1.0, 'neighbor_recovery': 0.3},
+    decision_model=None,  # Uses legacy utility model if omitted
+    time_step=1
 )
 ```
 

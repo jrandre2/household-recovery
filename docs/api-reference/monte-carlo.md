@@ -121,7 +121,8 @@ results = run_monte_carlo(
     progress_callback=None,
     thresholds=None,
     infra_config=None,
-    network_config=None
+    network_config=None,
+    recovus_config=None
 )
 ```
 
@@ -140,6 +141,7 @@ results = run_monte_carlo(
 | `thresholds` | `ThresholdConfig` | `None` | Classification thresholds |
 | `infra_config` | `InfrastructureConfig` | `None` | Infrastructure params |
 | `network_config` | `NetworkConfig` | `None` | Network params |
+| `recovus_config` | `RecovUSConfig` | `None` | RecovUS decision model config |
 
 ### Example
 

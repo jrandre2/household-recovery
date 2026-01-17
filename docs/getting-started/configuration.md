@@ -71,11 +71,28 @@ research:
   num_papers: 5
   cache_dir: ./.cache/scholar
   cache_expiry_hours: 24
+  us_only: true
+  pdf_use_full_text: true
+  pdf_max_pages: null
 
 api:
   llm_model: llama-3.3-70b-versatile
   llm_temperature: 0.05
   llm_max_tokens: 1200
+
+recovus:
+  enabled: true
+  perception_infrastructure: 0.65
+  perception_social: 0.31
+  perception_community: 0.04
+  adequacy_infrastructure: 0.50
+  adequacy_neighbor: 0.40
+  adequacy_community_assets: 0.50
+  transition_r0: 0.35
+  transition_r1: 0.95
+  transition_r2: 0.95
+  transition_relocate: 0.05
+  # See docs/user-guide/recovus.md for additional financial and damage parameters
 ```
 
 ## Configuration Classes
@@ -172,6 +189,29 @@ Paper retrieval settings.
 | `num_papers` | int | 5 | Papers to retrieve |
 | `cache_dir` | Path | ./.cache/scholar | Cache directory |
 | `cache_expiry_hours` | int | 24 | Cache validity |
+| `us_only` | bool | true | Filter to US-based studies |
+| `pdf_use_full_text` | bool | true | Use full PDF text for extraction |
+| `pdf_max_pages` | int/None | None | Max pages per PDF (None = all pages) |
+
+### RecovUSConfig
+
+Decision model parameters for RecovUS.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enabled` | bool | true | Enable RecovUS decision model |
+| `perception_infrastructure` | float | 0.65 | % infrastructure-aware households |
+| `perception_social` | float | 0.31 | % social-aware households |
+| `perception_community` | float | 0.04 | % community-aware households |
+| `adequacy_infrastructure` | float | 0.50 | Infrastructure adequacy threshold |
+| `adequacy_neighbor` | float | 0.40 | Neighbor recovery adequacy |
+| `adequacy_community_assets` | float | 0.50 | Business adequacy threshold |
+| `transition_r0` | float | 0.35 | P(repair \| feasible, not adequate) |
+| `transition_r1` | float | 0.95 | P(repair \| feasible, adequate) |
+| `transition_r2` | float | 0.95 | P(complete \| repairing, adequate) |
+| `transition_relocate` | float | 0.05 | P(relocate \| infeasible) |
+
+For the full RecovUS parameter list, see `docs/user-guide/recovus.md`.
 
 ## Network Types
 
@@ -230,12 +270,20 @@ python -m household_recovery --help
 | `--config` | `-c` | Path to config file |
 | `--households` | `-n` | Number of households |
 | `--steps` | `-s` | Simulation steps |
+| `--infrastructure` | | Number of infrastructure nodes |
+| `--businesses` | | Number of business nodes |
 | `--network` | | Network type |
+| `--connectivity` | | Network connectivity parameter |
 | `--seed` | | Random seed |
-| `--output-dir` | `-o` | Output directory |
 | `--monte-carlo` | `-m` | Number of Monte Carlo runs |
-| `--parallel` | `-p` | Use parallel execution |
-| `--pdf-dir` | | Local PDF directory |
+| `--parallel` | | Use parallel execution |
+| `--output` | `-o` | Output directory |
+| `--no-plots` | | Skip generating plots |
+| `--show` | | Display plots interactively |
+| `--pdf-dir` | `-p` | Local PDF directory |
 | `--serpapi-key` | | SerpAPI key |
 | `--groq-key` | | Groq API key |
+| `--fallback-only` | | Skip RAG, use fallback heuristics |
+| `--prefer-scholar` | | Prefer Scholar over local PDFs |
 | `--verbose` | `-v` | Verbose logging |
+| `--version` | | Show version and exit |

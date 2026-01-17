@@ -235,10 +235,12 @@ def main(args: list[str] | None = None) -> int:
         utility_weights=full_config.simulation.utility_weights,
     )
 
-    # Threshold, infrastructure, and network configs from file (no CLI override currently)
+    # Threshold, infrastructure, research, network, and RecovUS configs from file (no CLI override currently)
     thresholds = full_config.thresholds
     infra_config = full_config.infrastructure
+    research_config = full_config.research
     network_config = full_config.network
+    recovus_config = full_config.recovus
 
     # Only override env vars if explicitly provided on command line
     api_kwargs = {}
@@ -288,9 +290,10 @@ def main(args: list[str] | None = None) -> int:
 
     # Get heuristics
     heuristics = None
+    use_recovus = recovus_config.enabled
     if opts.fallback_only:
         logger.info("Using fallback heuristics (--fallback-only)")
-        heuristics = get_fallback_heuristics()
+        heuristics = get_fallback_heuristics(use_recovus=use_recovus)
     elif opts.pdf_dir or api_config.serpapi_key or api_config.groq_api_key:
         # Build knowledge base from PDFs and/or Scholar
         if opts.pdf_dir:
@@ -300,8 +303,13 @@ def main(args: list[str] | None = None) -> int:
             pdf_dir=opts.pdf_dir,
             serpapi_key=api_config.serpapi_key,
             groq_api_key=api_config.groq_api_key,
-            num_papers=5,
-            prefer_local=not opts.prefer_scholar
+            scholar_query=research_config.default_query,
+            num_papers=research_config.num_papers,
+            prefer_local=not opts.prefer_scholar,
+            use_recovus=use_recovus,
+            us_only=research_config.us_only,
+            use_full_text=research_config.pdf_use_full_text,
+            pdf_max_pages=research_config.pdf_max_pages,
         )
 
     try:
@@ -327,12 +335,14 @@ def main(args: list[str] | None = None) -> int:
                 config=sim_config,
                 n_runs=opts.monte_carlo,
                 api_config=api_config if not opts.fallback_only else None,
+                research_config=research_config,
                 heuristics=heuristics,
                 parallel=opts.parallel,
                 progress_callback=progress_callback,
                 thresholds=thresholds,
                 infra_config=infra_config,
                 network_config=network_config,
+                recovus_config=recovus_config,
             )
 
             if pbar:
@@ -360,10 +370,12 @@ def main(args: list[str] | None = None) -> int:
             engine = SimulationEngine(
                 config=sim_config,
                 api_config=api_config if not opts.fallback_only else None,
+                research_config=research_config,
                 heuristics=heuristics,
                 thresholds=thresholds,
                 infra_config=infra_config,
                 network_config=network_config,
+                recovus_config=recovus_config,
             )
 
             result = engine.run()

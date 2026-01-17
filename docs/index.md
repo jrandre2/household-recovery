@@ -12,6 +12,7 @@ This simulation combines traditional agent-based modeling (ABM) with Retrieval-A
 - [Installation](getting-started/installation.md) - Set up the project and dependencies
 - [Quickstart](getting-started/quickstart.md) - Run your first simulation in 5 minutes
 - [Configuration](getting-started/configuration.md) - Complete configuration reference
+- [Troubleshooting](troubleshooting.md) - Common issues and solutions
 
 ### User Guide
 - [Basic Simulation](user-guide/basic-simulation.md) - Understanding simulation runs
@@ -21,6 +22,7 @@ This simulation combines traditional agent-based modeling (ABM) with Retrieval-A
 - [Monte Carlo Analysis](user-guide/monte-carlo.md) - Statistical analysis with multiple runs
 - [Network Topologies](user-guide/network-topologies.md) - Choosing network structures
 - [Visualization](user-guide/visualization.md) - Creating plots and reports
+- [RecovUS Decision Model](user-guide/recovus.md) - Using the RecovUS model
 
 ### API Reference
 - [Overview](api-reference/index.md) - API structure and imports
@@ -29,6 +31,8 @@ This simulation combines traditional agent-based modeling (ABM) with Retrieval-A
 - [Network](api-reference/network.md) - Community network management
 - [Heuristics](api-reference/heuristics.md) - RAG pipeline and extraction
 - [Configuration](api-reference/config.md) - Configuration dataclasses
+- [Decision Model](api-reference/decision-model.md) - Decision model protocol and implementations
+- [RecovUS](api-reference/recovus.md) - RecovUS decision model components
 - [Monte Carlo](api-reference/monte-carlo.md) - Multi-run analysis
 - [Visualization](api-reference/visualization.md) - Plotting functions
 - [Safe Eval](api-reference/safe-eval.md) - Secure expression evaluation
@@ -41,6 +45,14 @@ This simulation combines traditional agent-based modeling (ABM) with Retrieval-A
 - [RAG Architecture](architecture/rag-architecture.md) - Research extraction pipeline
 - [Agent Model](architecture/agent-model.md) - ABM design decisions
 - [Security](architecture/security.md) - Safe evaluation of LLM-generated code
+- [State Diagrams](architecture/state-diagrams.md) - RecovUS state machine diagrams
+
+### Examples
+- [Configuration Examples](examples/config-examples.md) - Research-based YAML configurations
+
+### Development
+- [Development Guide](development.md) - Setting up a development environment
+- [Contributing](../CONTRIBUTING.md) - Contribution guidelines
 
 ## Key Features
 

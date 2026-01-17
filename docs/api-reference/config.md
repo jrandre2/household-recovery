@@ -11,6 +11,7 @@ from household_recovery.config import (
     APIConfig,
     VisualizationConfig,
     ResearchConfig,
+    RecovUSConfig,
     FullConfig,
     load_config_file
 )
@@ -166,6 +167,33 @@ Paper retrieval settings.
 | `num_papers` | `int` | 5 | Papers to retrieve |
 | `cache_dir` | `Path` | ./.cache/scholar | Cache directory |
 | `cache_expiry_hours` | `int` | 24 | Cache validity |
+| `us_only` | `bool` | True | Filter to US-based studies |
+| `pdf_use_full_text` | `bool` | True | Use full PDF text for extraction |
+| `pdf_max_pages` | `int | None` | `None` | Max pages per PDF (None = all pages) |
+
+---
+
+## RecovUSConfig
+
+Decision model configuration for RecovUS.
+
+For the full parameter list, see `docs/api-reference/recovus.md`.
+
+### Attributes
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enabled` | `bool` | True | Enable RecovUS decision model |
+| `perception_infrastructure` | `float` | 0.65 | % infrastructure-aware households |
+| `perception_social` | `float` | 0.31 | % social-aware households |
+| `perception_community` | `float` | 0.04 | % community-aware households |
+| `adequacy_infrastructure` | `float` | 0.50 | Infrastructure adequacy threshold |
+| `adequacy_neighbor` | `float` | 0.40 | Neighbor recovery adequacy |
+| `adequacy_community_assets` | `float` | 0.50 | Business adequacy threshold |
+| `transition_r0` | `float` | 0.35 | P(repair \| feasible, not adequate) |
+| `transition_r1` | `float` | 0.95 | P(repair \| feasible, adequate) |
+| `transition_r2` | `float` | 0.95 | P(complete \| repairing, adequate) |
+| `transition_relocate` | `float` | 0.05 | P(relocate \| infeasible) |
 
 ---
 
@@ -184,6 +212,7 @@ Complete configuration combining all components.
 | `thresholds` | `ThresholdConfig` | Classification thresholds |
 | `infrastructure` | `InfrastructureConfig` | Infrastructure params |
 | `network` | `NetworkConfig` | Network params |
+| `recovus` | `RecovUSConfig` | RecovUS decision model params |
 
 ### Class Methods
 
@@ -286,4 +315,15 @@ network:
 api:
   llm_model: llama-3.3-70b-versatile
   llm_temperature: 0.05
+
+research:
+  us_only: true
+  pdf_use_full_text: true
+  pdf_max_pages: null
+
+recovus:
+  enabled: true
+  perception_infrastructure: 0.65
+  perception_social: 0.31
+  perception_community: 0.04
 ```

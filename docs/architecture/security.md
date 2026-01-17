@@ -47,6 +47,17 @@ ALLOWED_CTX_KEYS = {
     'resilience_category',
     'household_income',
     'income_level',
+    'perception_type',
+    'damage_severity',
+    'recovery_state',
+    'is_feasible',
+    'is_adequate',
+    'is_habitable',
+    'repair_cost',
+    'available_resources',
+    'time_step',
+    'months_since_disaster',
+    'avg_neighbor_recovered_binary',
 }
 ```
 

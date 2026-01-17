@@ -9,11 +9,54 @@ of (or in addition to) Google Scholar.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
 logger = logging.getLogger(__name__)
+
+# US-based filtering helpers
+_US_STRONG_PATTERNS = [
+    re.compile(r"\bUnited States of America\b", re.IGNORECASE),
+    re.compile(r"\bUnited States\b", re.IGNORECASE),
+    re.compile(r"\bU\.S\.A\.?\b", re.IGNORECASE),
+    re.compile(r"\bU\.S\.\b", re.IGNORECASE),
+    re.compile(r"\bUSA\b", re.IGNORECASE),
+    re.compile(r"\bFEMA\b", re.IGNORECASE),
+    re.compile(r"\bSBA\b", re.IGNORECASE),
+    re.compile(r"\bCDBG\b", re.IGNORECASE),
+    re.compile(r"\bNFIP\b", re.IGNORECASE),
+    re.compile(r"\bHUD\b", re.IGNORECASE),
+    re.compile(r"\bUSGS\b", re.IGNORECASE),
+    re.compile(r"\bNOAA\b", re.IGNORECASE),
+]
+
+_US_STATE_NAMES = [
+    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut",
+    "Delaware", "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa",
+    "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan",
+    "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire",
+    "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma",
+    "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota", "Tennessee",
+    "Texas", "Utah", "Vermont", "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming",
+    "District of Columbia", "Washington DC", "Washington, DC", "Puerto Rico",
+]
+
+_US_STATE_PATTERN = re.compile(
+    r"\b(" + "|".join(re.escape(name) for name in _US_STATE_NAMES) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def is_us_based(text: str) -> bool:
+    """Return True if the text suggests the study is US-based."""
+    if not text:
+        return False
+    for pattern in _US_STRONG_PATTERNS:
+        if pattern.search(text):
+            return True
+    return _US_STATE_PATTERN.search(text) is not None
 
 
 @dataclass
@@ -43,51 +86,63 @@ class PDFReader:
         """Check if PDF reading libraries are available."""
         try:
             import pypdf
-            self._use_pypdf = True
-            return True
+            self._has_pypdf = True
         except ImportError:
-            pass
+            self._has_pypdf = False
 
         try:
             import PyPDF2
-            self._use_pypdf = False
-            return True
+            self._has_pypdf2 = True
         except ImportError:
-            pass
+            self._has_pypdf2 = False
 
-        logger.error(
-            "No PDF library found. Install with: pip install pypdf"
-        )
+        if self._has_pypdf or self._has_pypdf2:
+            return True
+
+        logger.error("No PDF library found. Install with: pip install pypdf")
         return False
 
-    def extract_text(self, filepath: Path, max_pages: int = 5) -> str:
+    def extract_text(self, filepath: Path, max_pages: int | None = 5) -> str:
         """
         Extract text from a PDF file.
 
         Args:
             filepath: Path to the PDF file
-            max_pages: Maximum number of pages to read (for efficiency)
+            max_pages: Maximum number of pages to read (None = all pages)
 
         Returns:
             Extracted text content
         """
-        try:
-            if hasattr(self, '_use_pypdf') and self._use_pypdf:
+        if getattr(self, "_has_pypdf", False):
+            try:
                 return self._extract_with_pypdf(filepath, max_pages)
-            else:
-                return self._extract_with_pypdf2(filepath, max_pages)
-        except Exception as e:
-            logger.warning(f"Failed to extract text from {filepath}: {e}")
-            return ""
+            except Exception as e:
+                logger.warning(f"Failed to extract text with pypdf from {filepath}: {e}")
+                if getattr(self, "_has_pypdf2", False):
+                    try:
+                        return self._extract_with_pypdf2(filepath, max_pages)
+                    except Exception as e2:
+                        logger.warning(f"Failed to extract text with PyPDF2 from {filepath}: {e2}")
+                return ""
 
-    def _extract_with_pypdf(self, filepath: Path, max_pages: int) -> str:
+        if getattr(self, "_has_pypdf2", False):
+            try:
+                return self._extract_with_pypdf2(filepath, max_pages)
+            except Exception as e:
+                logger.warning(f"Failed to extract text with PyPDF2 from {filepath}: {e}")
+                return ""
+
+        logger.warning(f"No PDF backend available to read {filepath}")
+        return ""
+
+    def _extract_with_pypdf(self, filepath: Path, max_pages: int | None) -> str:
         """Extract text using pypdf library."""
         import pypdf
 
         text_parts = []
         with open(filepath, 'rb') as f:
-            reader = pypdf.PdfReader(f)
-            num_pages = min(len(reader.pages), max_pages)
+            reader = pypdf.PdfReader(f, strict=False)
+            num_pages = len(reader.pages) if max_pages is None else min(len(reader.pages), max_pages)
 
             for i in range(num_pages):
                 page = reader.pages[i]
@@ -97,14 +152,14 @@ class PDFReader:
 
         return "\n\n".join(text_parts)
 
-    def _extract_with_pypdf2(self, filepath: Path, max_pages: int) -> str:
+    def _extract_with_pypdf2(self, filepath: Path, max_pages: int | None) -> str:
         """Extract text using PyPDF2 library."""
         import PyPDF2
 
         text_parts = []
         with open(filepath, 'rb') as f:
-            reader = PyPDF2.PdfReader(f)
-            num_pages = min(len(reader.pages), max_pages)
+            reader = PyPDF2.PdfReader(f, strict=False)
+            num_pages = len(reader.pages) if max_pages is None else min(len(reader.pages), max_pages)
 
             for i in range(num_pages):
                 page = reader.pages[i]
@@ -173,14 +228,14 @@ class LocalPaperRetriever:
     def filter_relevant(
         self,
         keywords: list[str] | None = None,
-        max_papers: int = 10
+        max_papers: int | None = 10,
     ) -> list[Path]:
         """
         Filter PDFs by filename keywords.
 
         Args:
             keywords: List of keywords to match in filename (case-insensitive)
-            max_papers: Maximum number of papers to return
+            max_papers: Maximum number of papers to return (None for no limit)
 
         Returns:
             List of matching PDF paths
@@ -188,7 +243,7 @@ class LocalPaperRetriever:
         all_papers = self.list_papers()
 
         if not keywords:
-            return all_papers[:max_papers]
+            return all_papers if max_papers is None else all_papers[:max_papers]
 
         keywords_lower = [k.lower() for k in keywords]
 
@@ -197,7 +252,7 @@ class LocalPaperRetriever:
             name_lower = pdf_path.stem.lower()
             if any(kw in name_lower for kw in keywords_lower):
                 matching.append(pdf_path)
-                if len(matching) >= max_papers:
+                if max_papers is not None and len(matching) >= max_papers:
                     break
 
         return matching
@@ -206,7 +261,9 @@ class LocalPaperRetriever:
         self,
         pdf_paths: list[Path] | None = None,
         keywords: list[str] | None = None,
-        max_papers: int = 5
+        max_papers: int = 5,
+        max_pages: int | None = 5,
+        us_only: bool = False,
     ) -> list[LocalPaper]:
         """
         Load papers from PDF files.
@@ -215,21 +272,28 @@ class LocalPaperRetriever:
             pdf_paths: Specific PDF paths to load (overrides keywords)
             keywords: Keywords to filter by filename
             max_papers: Maximum papers to load
+            max_pages: Maximum pages per PDF to read (None = all pages)
+            us_only: If True, only include US-based studies
 
         Returns:
             List of LocalPaper objects with extracted text
         """
         if pdf_paths is None:
             if keywords:
-                pdf_paths = self.filter_relevant(keywords, max_papers)
+                pdf_paths = self.filter_relevant(
+                    keywords,
+                    None if us_only else max_papers,
+                )
             else:
-                pdf_paths = self.list_papers()[:max_papers]
+                pdf_paths = self.list_papers()
+                if not us_only:
+                    pdf_paths = pdf_paths[:max_papers]
 
         papers = []
         for pdf_path in pdf_paths:
             logger.info(f"Reading: {pdf_path.name}")
 
-            full_text = self.reader.extract_text(pdf_path)
+            full_text = self.reader.extract_text(pdf_path, max_pages=max_pages)
             if not full_text:
                 logger.warning(f"  No text extracted, skipping")
                 continue
@@ -238,6 +302,12 @@ class LocalPaperRetriever:
 
             # Use filename as title (clean it up)
             title = pdf_path.stem.replace("-", " ").replace("_", " ")
+
+            focus_text = full_text[:8000]
+            text_for_filter = f"{pdf_path.name}\n{title}\n{abstract}\n{focus_text}"
+            if us_only and not is_us_based(text_for_filter):
+                logger.info("  Skipping non-US paper")
+                continue
 
             paper = LocalPaper(
                 title=title,
@@ -248,6 +318,8 @@ class LocalPaperRetriever:
             papers.append(paper)
 
             logger.info(f"  Extracted {len(abstract)} chars of abstract")
+            if max_papers is not None and len(papers) >= max_papers:
+                break
 
         return papers
 
@@ -270,7 +342,9 @@ DISASTER_RECOVERY_KEYWORDS = [
 
 def load_recovery_papers(
     pdf_dir: Path | str,
-    max_papers: int = 5
+    max_papers: int = 5,
+    max_pages: int | None = 5,
+    us_only: bool = False,
 ) -> list[LocalPaper]:
     """
     Convenience function to load disaster recovery papers from a directory.
@@ -278,6 +352,8 @@ def load_recovery_papers(
     Args:
         pdf_dir: Directory containing PDF files
         max_papers: Maximum number of papers to load
+        max_pages: Maximum pages per PDF to read (None = all pages)
+        us_only: If True, only include US-based studies
 
     Returns:
         List of LocalPaper objects
@@ -287,12 +363,18 @@ def load_recovery_papers(
     # First try to find relevant papers by keywords
     papers = retriever.load_papers(
         keywords=DISASTER_RECOVERY_KEYWORDS,
-        max_papers=max_papers
+        max_papers=max_papers,
+        max_pages=max_pages,
+        us_only=us_only,
     )
 
     if not papers:
         # Fallback to any PDFs
         logger.info("No keyword matches, loading first available PDFs")
-        papers = retriever.load_papers(max_papers=max_papers)
+        papers = retriever.load_papers(
+            max_papers=max_papers,
+            max_pages=max_pages,
+            us_only=us_only,
+        )
 
     return papers

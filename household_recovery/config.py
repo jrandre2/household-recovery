@@ -103,6 +103,112 @@ class NetworkConfig:
 
 
 @dataclass
+class RecovUSConfig:
+    """
+    Configuration for RecovUS decision model.
+
+    The RecovUS model implements sophisticated household recovery decisions
+    based on three components:
+    1. Perception types (ASNA Index): How households perceive community recovery
+    2. Financial feasibility: Can the household afford to repair?
+    3. Community adequacy: Is the community sufficiently recovered?
+
+    Reference: Moradi & Nejat (2020) - RecovUS model
+    https://www.jasss.org/23/4/13.html
+    """
+    # Enable/disable RecovUS model
+    enabled: bool = True
+
+    # Perception type distribution (ASNA Index)
+    # These should sum to 1.0
+    perception_infrastructure: float = 0.65  # Infrastructure-aware households
+    perception_social: float = 0.31  # Social-network-aware households
+    perception_community: float = 0.04  # Community-assets-aware households
+
+    # Community adequacy thresholds
+    adequacy_infrastructure: float = 0.50  # adq_infr: Infrastructure recovery threshold
+    adequacy_neighbor: float = 0.40  # adq_nbr: Neighbor recovery threshold
+    adequacy_community_assets: float = 0.50  # adq_cas: Community assets threshold
+
+    # State transition probabilities
+    transition_r0: float = 0.35  # Repair when only financially feasible (not adequate)
+    transition_r1: float = 0.95  # Repair when both feasible AND adequate
+    transition_r2: float = 0.95  # Completion probability when adequate
+    transition_relocate: float = 0.05  # Relocate when financially infeasible
+
+    # Financial parameters
+    insurance_penetration_rate: float = 0.60  # Probability of having insurance
+    fema_ha_max: float = 35500.0  # Maximum FEMA Housing Assistance grant (USD)
+    sba_loan_max: float = 200000.0  # Maximum SBA disaster loan (USD)
+    sba_income_floor: float = 30000.0  # Minimum income for SBA eligibility
+    sba_uptake_rate: float = 0.40  # Probability of taking SBA loan if eligible
+    cdbg_dr_coverage_rate: float = 0.50  # CDBG-DR coverage as fraction of costs
+    cdbg_dr_probability: float = 0.30  # Probability of receiving CDBG-DR
+
+    # Damage cost multipliers (as fraction of home value)
+    damage_cost_minor: float = 0.10
+    damage_cost_moderate: float = 0.30
+    damage_cost_severe: float = 0.60
+    damage_cost_destroyed: float = 1.00
+
+    # Temporary housing
+    temp_housing_monthly: float = 1500.0  # Monthly temporary housing cost (USD)
+
+    def __post_init__(self) -> None:
+        """Validate configuration after initialization."""
+        self.validate()
+
+    def validate(self) -> None:
+        """Validate RecovUS configuration."""
+        # Validate perception distribution sums to 1.0
+        pct_sum = self.perception_infrastructure + self.perception_social + self.perception_community
+        if abs(pct_sum - 1.0) > 0.01:
+            raise ValueError(
+                f"Perception percentages must sum to 1.0, got {pct_sum:.3f}"
+            )
+
+        # Validate probabilities are in [0, 1]
+        prob_fields = [
+            'transition_r0', 'transition_r1', 'transition_r2', 'transition_relocate',
+            'insurance_penetration_rate', 'sba_uptake_rate', 'cdbg_dr_probability',
+            'cdbg_dr_coverage_rate',
+        ]
+        for field_name in prob_fields:
+            value = getattr(self, field_name)
+            if not 0.0 <= value <= 1.0:
+                raise ValueError(f"{field_name} must be in [0, 1], got {value}")
+
+        # Validate adequacy thresholds are in [0, 1]
+        for field_name in ['adequacy_infrastructure', 'adequacy_neighbor', 'adequacy_community_assets']:
+            value = getattr(self, field_name)
+            if not 0.0 <= value <= 1.0:
+                raise ValueError(f"{field_name} must be in [0, 1], got {value}")
+
+        # Validate damage cost multipliers are in [0, 1]
+        for field_name in ['damage_cost_minor', 'damage_cost_moderate', 'damage_cost_severe', 'damage_cost_destroyed']:
+            value = getattr(self, field_name)
+            if not 0.0 <= value <= 1.0:
+                raise ValueError(f"{field_name} must be in [0, 1], got {value}")
+
+    def get_transition_probabilities(self) -> dict[str, float]:
+        """Get transition probabilities as a dictionary."""
+        return {
+            'r0': self.transition_r0,
+            'r1': self.transition_r1,
+            'r2': self.transition_r2,
+            'relocate': self.transition_relocate,
+        }
+
+    def get_adequacy_thresholds(self) -> dict[str, float]:
+        """Get adequacy thresholds as a dictionary."""
+        return {
+            'infrastructure': self.adequacy_infrastructure,
+            'neighbor': self.adequacy_neighbor,
+            'community_assets': self.adequacy_community_assets,
+        }
+
+
+@dataclass
 class SimulationConfig:
     """
     Configuration for the household recovery simulation.
@@ -165,6 +271,9 @@ class ResearchConfig:
     num_papers: int = 5
     cache_dir: Path = field(default_factory=lambda: Path("./.cache/scholar"))
     cache_expiry_hours: int = 24
+    us_only: bool = True
+    pdf_use_full_text: bool = True
+    pdf_max_pages: int | None = None
 
     def __post_init__(self):
         """Ensure cache directory exists."""
@@ -210,6 +319,7 @@ class FullConfig:
     thresholds: ThresholdConfig = field(default_factory=ThresholdConfig)
     infrastructure: InfrastructureConfig = field(default_factory=InfrastructureConfig)
     network: NetworkConfig = field(default_factory=NetworkConfig)
+    recovus: RecovUSConfig = field(default_factory=RecovUSConfig)
 
     @classmethod
     def from_dict(cls, data: dict) -> FullConfig:
@@ -225,6 +335,9 @@ class FullConfig:
                 'resilience_high': threshold_data.get('resilience', {}).get('high', 0.70),
             }
 
+        # Handle RecovUS config
+        recovus_data = data.get('recovus', {})
+
         return cls(
             simulation=SimulationConfig(**data.get('simulation', {})),
             visualization=VisualizationConfig(**data.get('visualization', {})),
@@ -233,6 +346,7 @@ class FullConfig:
             thresholds=ThresholdConfig(**threshold_data),
             infrastructure=InfrastructureConfig(**data.get('infrastructure', {})),
             network=NetworkConfig(**data.get('network', {})),
+            recovus=RecovUSConfig(**recovus_data),
         )
 
     @classmethod
@@ -246,6 +360,7 @@ class FullConfig:
         self.thresholds.validate()
         self.infrastructure.validate()
         self.network.validate()
+        self.recovus.validate()
 
     def to_dict(self) -> dict[str, Any]:
         """Convert configuration to dictionary."""
@@ -263,4 +378,5 @@ class FullConfig:
             'thresholds': asdict(self.thresholds),
             'infrastructure': asdict(self.infrastructure),
             'network': asdict(self.network),
+            'recovus': asdict(self.recovus),
         }

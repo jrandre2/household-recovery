@@ -66,13 +66,13 @@ Detailed data flow diagrams for the simulation.
 │      │     • Check condition (safe_eval)                     │    │
 │      │     • Accumulate boosts/extra_recovery                │    │
 │      │                                                       │    │
-│      │  3. Calculate proposed recovery                       │    │
+│      │  3. Calculate proposed recovery (utility model only)  │    │
 │      │     increment = base_rate * boost + extra             │    │
 │      │     proposed = current + increment (capped at 1.0)    │    │
 │      │                                                       │    │
-│      │  4. Utility-based decision                            │    │
-│      │     if utility(proposed) > utility(current):          │    │
-│      │         accept recovery                               │    │
+│      │  4. Decision model                                    │    │
+│      │     • RecovUS: feasibility + adequacy + state machine │    │
+│      │     • Utility: accept if utility increases            │    │
 │      └──────────────────────────────────────────────────────┘    │
 │                                                                   │
 │      ┌──────────────────────────────────────────────────────┐    │
@@ -130,7 +130,7 @@ Detailed data flow diagrams for the simulation.
 │     params = {engine: google_scholar, q: query, num: 5}         │
 │                                                                 │
 │  3. Parse results into Paper objects                            │
-│     Paper(title, abstract, authors, year, link, cited_by)       │
+│     Paper(title, abstract/text, authors, year, link, cited_by)   │
 │                                                                 │
 │  4. Cache results                                               │
 │                                                                 │
@@ -141,7 +141,7 @@ Detailed data flow diagrams for the simulation.
 ┌────────────────────────────────────────────────────────────────┐
 │                  HEURISTIC EXTRACTOR                            │
 │                                                                 │
-│  1. Format abstracts into prompt                                │
+│  1. Format text excerpts into prompt                            │
 │     "Extract 4-6 actionable heuristics..."                      │
 │     Include: allowed context keys, output format                │
 │                                                                 │
@@ -164,7 +164,7 @@ Detailed data flow diagrams for the simulation.
 ┌────────────────────────────────────────────────────────────────┐
 │                 PARAMETER EXTRACTOR (Optional)                  │
 │                                                                 │
-│  1. Format abstracts into parameter prompt                      │
+│  1. Format text excerpts into parameter prompt                  │
 │     "Extract numeric parameters: recovery rates, thresholds..." │
 │                                                                 │
 │  2. Call LLM                                                    │

@@ -21,7 +21,8 @@ SimulationEngine(
     heuristics: list[Heuristic] | None = None,
     thresholds: ThresholdConfig | None = None,
     infra_config: InfrastructureConfig | None = None,
-    network_config: NetworkConfig | None = None
+    network_config: NetworkConfig | None = None,
+    recovus_config: RecovUSConfig | None = None
 )
 ```
 
@@ -34,6 +35,9 @@ SimulationEngine(
 | `thresholds` | `ThresholdConfig` | `None` | Income/resilience classification |
 | `infra_config` | `InfrastructureConfig` | `None` | Infrastructure parameters |
 | `network_config` | `NetworkConfig` | `None` | Network connection parameters |
+| `recovus_config` | `RecovUSConfig` | `None` | RecovUS decision model configuration |
+
+**Note:** RecovUS is enabled by default. Set `RecovUSConfig(enabled=False)` to use the legacy utility-based model.
 
 ### Methods
 
