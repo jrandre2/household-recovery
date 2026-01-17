@@ -1,6 +1,8 @@
 # Household Recovery Simulation
 
-A RAG-enhanced agent-based model for simulating community disaster recovery. This simulation combines traditional agent-based modeling with Retrieval-Augmented Generation (RAG) to ground behavioral rules in academic research.
+A RAG-enhanced agent-based model for simulating community disaster recovery.
+
+Point this system at research papers, and it automatically extracts behavioral rules and parameters for simulation. Parameters trace to specific studies with confidence scores, and models update as new papers are added. The RAG pipeline, safe evaluation layer, and RecovUS decision model together create a simulation framework where researchers can test whether findings from one disaster context transfer to another.
 
 ## Features
 
@@ -28,6 +30,7 @@ pip install -r requirements.txt
 
 For detailed documentation, see the `docs/` directory:
 
+- **[Use Cases](docs/use-cases.md)** - Applications and practical use cases
 - **[Getting Started](docs/getting-started/)** - Installation, quickstart, configuration reference
 - **[User Guide](docs/user-guide/)** - Tutorials on simulations, RAG, Monte Carlo, networks
 - **[API Reference](docs/api-reference/)** - Complete class and function documentation
