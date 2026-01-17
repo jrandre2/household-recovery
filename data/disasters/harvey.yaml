@@ -1,0 +1,72 @@
+# Hurricane Harvey Disaster Funding Data
+# FEMA Disaster Number: DR-4332-TX
+# Declaration Date: August 25, 2017
+#
+# This file serves as a template for adding other disasters.
+# Data sources are cited for each section.
+
+disaster_name: "Hurricane Harvey"
+disaster_number: 4332
+disaster_type: hurricane
+declaration_date: "2017-08-25"
+state: TX
+
+# Affected Population
+# Source: FEMA Individual Assistance data
+affected_households: 895000
+eligible_households: 750000
+
+# CDBG-DR Funding
+# Source: HUD Federal Register FR-6066-N-01 (Feb 9, 2018)
+# Note: This is the first tranche allocation. Additional tranches followed.
+cdbg_dr_total_allocation: 5024215000  # $5.024 billion
+cdbg_dr_housing_allocation: 3500000000  # Approx 70% for housing programs
+cdbg_dr_households_served: 40000  # Estimated from DRGR system
+cdbg_dr_average_award: 87500
+
+# FEMA Individual Assistance
+# Source: OpenFEMA IndividualsAndHouseholdsValidRegistrations
+fema_ia_total_approved: 1687000000  # $1.687 billion total IA
+fema_ha_total: 1200000000  # $1.2 billion Housing Assistance
+fema_ha_average: 5200  # Average HA grant
+fema_ha_max_at_time: 33000  # HA cap in 2017
+fema_registrations: 895000
+fema_approvals: 364000
+
+# SBA Disaster Loans
+# Source: SBA Disaster Loan Statistics
+sba_loans_approved: 35000
+sba_total_amount: 2100000000  # $2.1 billion
+sba_average_loan: 60000
+sba_approval_rate: 0.42
+
+# NFIP Claims
+# Source: OpenFEMA FimaNfipClaims
+nfip_claims_count: 96000
+nfip_total_paid: 8900000000  # $8.9 billion
+nfip_average_claim: 92700
+nfip_policies_in_force: 500000
+
+# Insurance Penetration
+# Calculated: NFIP policies / affected households = 500k / 895k = 0.56
+insurance_penetration_rate: 0.56
+
+# Recovery Outcomes (for model validation)
+# Source: Various academic studies on Harvey recovery
+recovery_rate_1yr: 0.35  # ~35% recovered at 1 year
+recovery_rate_3yr: 0.75  # ~75% recovered at 3 years
+relocation_rate: 0.08  # ~8% permanently relocated
+
+# Metadata
+data_sources:
+  - "HUD Federal Register FR-6066-N-01 (Feb 9, 2018)"
+  - "OpenFEMA API - IndividualsAndHouseholdsValidRegistrations"
+  - "OpenFEMA API - FimaNfipClaims"
+  - "SBA Disaster Loan Statistics"
+
+last_updated: "2025-01-16"
+notes: >
+  Hurricane Harvey made landfall as a Category 4 hurricane on August 25, 2017.
+  The storm stalled over the Houston metropolitan area, causing unprecedented
+  flooding. This data represents the first tranche of CDBG-DR allocation;
+  additional tranches were allocated in subsequent Federal Register notices.

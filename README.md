@@ -8,12 +8,14 @@ Point this system at research papers, and it automatically extracts behavioral r
 
 - **Agent-Based Modeling**: Simulate household, infrastructure, and business recovery dynamics
 - **RecovUS Decision Model**: Sophisticated household decisions based on financial feasibility and community adequacy
+- **Disaster-Specific Funding Data**: Calibrate simulations with official CDBG-DR, FEMA, SBA, and NFIP data from known disasters
 - **RAG-Enhanced Heuristics**: Extract behavioral rules from academic papers via LLM
 - **Automatic Parameter Extraction**: Extract numeric parameters (recovery rates, thresholds) from research
+- **18 Research-Based Configs**: Pre-built configurations derived from peer-reviewed disaster recovery studies
 - **YAML/JSON Configuration**: Externalize all parameters in config files
 - **Multiple Network Topologies**: Barabasi-Albert, Watts-Strogatz, Erdos-Renyi, Random Geometric
 - **Monte Carlo Support**: Run multiple simulations with statistical analysis
-- **Parameter Merging**: Smart precedence between RAG-extracted, config file, and default values
+- **Parameter Merging**: Smart 4-tier precedence (official data → RAG → config → defaults)
 
 ## Installation
 
@@ -51,6 +53,12 @@ python -m household_recovery --config config.yaml
 
 # Run Monte Carlo simulation
 python -m household_recovery --monte-carlo 100 --parallel
+
+# Use disaster-specific funding data (Hurricane Harvey)
+python -m household_recovery --disaster "Hurricane Harvey" --households 100 --steps 24
+
+# Use a research-based config (from academic papers)
+python -m household_recovery --config configs/manual/katrina_stable_housing_2022.yaml
 
 # Use local PDFs for heuristic extraction
 python -m household_recovery --pdf-dir ~/research/papers --groq-key YOUR_KEY
@@ -107,11 +115,13 @@ python -m household_recovery --config config.yaml
 
 Parameters are merged with the following precedence (highest to lowest):
 
-1. **RAG-extracted parameters** (if confidence >= threshold, default 0.7)
-2. **Config file values**
-3. **Hardcoded defaults**
+1. **Official disaster funding data** (from `--disaster` or YAML files)
+2. **RAG-extracted parameters** (if confidence >= threshold, default 0.7)
+3. **Config file values**
+4. **Hardcoded defaults**
 
 This means:
+- Official disaster data (CDBG-DR allocations, FEMA caps, etc.) overrides all other sources
 - Research-grounded values automatically override defaults when confidently extracted
 - You can override RAG values by setting explicit values in your config file
 - CLI arguments override config file values for basic parameters
@@ -259,6 +269,7 @@ household_recovery/
 ├── network.py           # Network creation and management
 ├── simulation.py        # Simulation engine and parameter merger
 ├── decision_model.py    # Decision model protocol and implementations
+├── disaster_funding.py  # Official disaster funding data integration
 ├── heuristics.py        # RAG pipeline and parameter extraction
 ├── monte_carlo.py       # Multi-run analysis
 ├── safe_eval.py         # Secure expression evaluation
@@ -270,6 +281,16 @@ household_recovery/
     ├── financial.py     # Financial feasibility model
     ├── community.py     # Community adequacy criteria
     └── state_machine.py # Recovery state transitions
+
+data/
+└── disasters/           # Official disaster funding data
+    └── harvey.yaml      # Hurricane Harvey (DR-4332)
+
+configs/
+└── manual/              # 18 research-based configurations
+    ├── hurricane_andrew_1992.yaml
+    ├── katrina_stable_housing_2022.yaml
+    └── ...              # See docs/examples/research-configs.md
 ```
 
 ## Key Concepts

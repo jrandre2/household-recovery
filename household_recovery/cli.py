@@ -16,7 +16,8 @@ from pathlib import Path
 
 from .config import (
     SimulationConfig, APIConfig, ResearchConfig, VisualizationConfig,
-    FullConfig, ThresholdConfig, InfrastructureConfig, NetworkConfig
+    FullConfig, ThresholdConfig, InfrastructureConfig, NetworkConfig,
+    DisasterFundingConfig,
 )
 
 
@@ -175,6 +176,35 @@ Examples:
         help='Load configuration from YAML or JSON file. CLI arguments override config file values.'
     )
 
+    # Disaster-specific funding data
+    disaster_group = parser.add_argument_group('Disaster-Specific Funding Data')
+    disaster_group.add_argument(
+        '--disaster', '-d',
+        type=str,
+        default=None,
+        metavar='NAME',
+        help='Use known disaster funding data (e.g., "Hurricane Harvey")'
+    )
+    disaster_group.add_argument(
+        '--disaster-number',
+        type=int,
+        default=None,
+        metavar='NUM',
+        help='Use FEMA disaster number (e.g., 4332 for Hurricane Harvey)'
+    )
+    disaster_group.add_argument(
+        '--disaster-file',
+        type=Path,
+        default=None,
+        metavar='FILE',
+        help='Load disaster funding data from a specific YAML file'
+    )
+    disaster_group.add_argument(
+        '--list-disasters',
+        action='store_true',
+        help='List available disasters in the registry and exit'
+    )
+
     # Misc
     parser.add_argument(
         '--verbose', '-v',
@@ -205,6 +235,23 @@ def main(args: list[str] | None = None) -> int:
 
     setup_logging(opts.verbose)
     logger = logging.getLogger(__name__)
+
+    # Handle --list-disasters early
+    if opts.list_disasters:
+        from .disaster_funding import DisasterFundingRegistry
+        registry = DisasterFundingRegistry.load_builtin()
+        disasters = registry.list_disasters()
+        if disasters:
+            print("Available disasters in registry:")
+            for name in sorted(disasters):
+                record = registry.get(name)
+                if record:
+                    number_str = f" (DR-{record.disaster_number})" if record.disaster_number else ""
+                    print(f"  - {record.disaster_name}{number_str}")
+        else:
+            print("No disasters found in registry.")
+            print("Add YAML files to data/disasters/ directory.")
+        return 0
 
     # Load config file if provided
     if opts.config:
@@ -242,6 +289,15 @@ def main(args: list[str] | None = None) -> int:
     network_config = full_config.network
     recovus_config = full_config.recovus
 
+    # Build disaster funding config - CLI args override config file
+    disaster_funding_config = DisasterFundingConfig(
+        use_builtin_registry=full_config.disaster_funding.use_builtin_registry,
+        disaster_name=opts.disaster if opts.disaster else full_config.disaster_funding.disaster_name,
+        disaster_number=opts.disaster_number if opts.disaster_number else full_config.disaster_funding.disaster_number,
+        disaster_file=opts.disaster_file if opts.disaster_file else full_config.disaster_funding.disaster_file,
+        prefer_official_over_research=full_config.disaster_funding.prefer_official_over_research,
+    )
+
     # Only override env vars if explicitly provided on command line
     api_kwargs = {}
     if opts.serpapi_key:
@@ -269,6 +325,15 @@ def main(args: list[str] | None = None) -> int:
     logger.info(f"Steps: {sim_config.steps}")
     logger.info(f"Network: {sim_config.network_type}")
     logger.info(f"Output: {viz_config.output_dir}")
+
+    # Log disaster funding if specified
+    if disaster_funding_config.disaster_name or disaster_funding_config.disaster_number or disaster_funding_config.disaster_file:
+        disaster_str = (
+            disaster_funding_config.disaster_name
+            or f"DR-{disaster_funding_config.disaster_number}"
+            or str(disaster_funding_config.disaster_file)
+        )
+        logger.info(f"Disaster data: {disaster_str}")
 
     if opts.monte_carlo:
         logger.info(f"Monte Carlo runs: {opts.monte_carlo}")
@@ -376,6 +441,7 @@ def main(args: list[str] | None = None) -> int:
                 infra_config=infra_config,
                 network_config=network_config,
                 recovus_config=recovus_config,
+                disaster_funding_config=disaster_funding_config,
             )
 
             result = engine.run()

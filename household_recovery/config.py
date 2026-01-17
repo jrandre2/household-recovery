@@ -281,6 +281,33 @@ class ResearchConfig:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
 
+@dataclass
+class DisasterFundingConfig:
+    """
+    Configuration for disaster-specific funding data.
+
+    Allows using known disaster funding data (CDBG-DR allocations, FEMA IA totals,
+    SBA loan data) from official records to calibrate simulation parameters.
+    """
+    # Use built-in disaster registry on startup
+    use_builtin_registry: bool = True
+
+    # Specific disaster to use for this simulation (by name or number)
+    disaster_name: str | None = None
+    disaster_number: int | None = None
+
+    # Path to a specific disaster data file (overrides name/number lookup)
+    disaster_file: Path | None = None
+
+    # Whether official data takes precedence over RAG-extracted values
+    prefer_official_over_research: bool = True
+
+    def __post_init__(self) -> None:
+        """Convert disaster_file to Path if needed."""
+        if self.disaster_file is not None and not isinstance(self.disaster_file, Path):
+            self.disaster_file = Path(self.disaster_file)
+
+
 def load_config_file(filepath: Path | str) -> dict[str, Any]:
     """
     Load configuration from a YAML or JSON file.
@@ -320,6 +347,7 @@ class FullConfig:
     infrastructure: InfrastructureConfig = field(default_factory=InfrastructureConfig)
     network: NetworkConfig = field(default_factory=NetworkConfig)
     recovus: RecovUSConfig = field(default_factory=RecovUSConfig)
+    disaster_funding: DisasterFundingConfig = field(default_factory=DisasterFundingConfig)
 
     @classmethod
     def from_dict(cls, data: dict) -> FullConfig:
@@ -338,6 +366,9 @@ class FullConfig:
         # Handle RecovUS config
         recovus_data = data.get('recovus', {})
 
+        # Handle disaster funding config
+        disaster_funding_data = data.get('disaster_funding', {})
+
         return cls(
             simulation=SimulationConfig(**data.get('simulation', {})),
             visualization=VisualizationConfig(**data.get('visualization', {})),
@@ -347,6 +378,7 @@ class FullConfig:
             infrastructure=InfrastructureConfig(**data.get('infrastructure', {})),
             network=NetworkConfig(**data.get('network', {})),
             recovus=RecovUSConfig(**recovus_data),
+            disaster_funding=DisasterFundingConfig(**disaster_funding_data),
         )
 
     @classmethod
@@ -364,6 +396,10 @@ class FullConfig:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert configuration to dictionary."""
+        disaster_funding_dict = asdict(self.disaster_funding)
+        if self.disaster_funding.disaster_file is not None:
+            disaster_funding_dict['disaster_file'] = str(self.disaster_funding.disaster_file)
+
         return {
             'simulation': asdict(self.simulation),
             'visualization': {
@@ -379,4 +415,5 @@ class FullConfig:
             'infrastructure': asdict(self.infrastructure),
             'network': asdict(self.network),
             'recovus': asdict(self.recovus),
+            'disaster_funding': disaster_funding_dict,
         }

@@ -12,6 +12,7 @@ from household_recovery.config import (
     VisualizationConfig,
     ResearchConfig,
     RecovUSConfig,
+    DisasterFundingConfig,
     FullConfig,
     load_config_file
 )
@@ -197,6 +198,39 @@ For the full parameter list, see `docs/api-reference/recovus.md`.
 
 ---
 
+## DisasterFundingConfig
+
+Configuration for disaster-specific funding data.
+
+For the full guide, see `docs/user-guide/disaster-funding.md`.
+
+### Attributes
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `use_builtin_registry` | `bool` | True | Load disasters from data/disasters/ |
+| `disaster_name` | `str \| None` | None | Disaster name (e.g., "Hurricane Harvey") |
+| `disaster_number` | `int \| None` | None | FEMA disaster number (e.g., 4332) |
+| `disaster_file` | `Path \| None` | None | Path to custom YAML file |
+| `prefer_official_over_research` | `bool` | True | Official data overrides RAG values |
+
+### Usage
+
+```python
+from household_recovery.config import DisasterFundingConfig
+
+# By name
+config = DisasterFundingConfig(disaster_name="Hurricane Harvey")
+
+# By FEMA number
+config = DisasterFundingConfig(disaster_number=4332)
+
+# From custom file
+config = DisasterFundingConfig(disaster_file="path/to/disaster.yaml")
+```
+
+---
+
 ## FullConfig
 
 Complete configuration combining all components.
@@ -213,6 +247,7 @@ Complete configuration combining all components.
 | `infrastructure` | `InfrastructureConfig` | Infrastructure params |
 | `network` | `NetworkConfig` | Network params |
 | `recovus` | `RecovUSConfig` | RecovUS decision model params |
+| `disaster_funding` | `DisasterFundingConfig` | Disaster-specific funding data |
 
 ### Class Methods
 

@@ -20,7 +20,8 @@ import numpy as np
 
 from .config import (
     SimulationConfig, APIConfig, ResearchConfig,
-    ThresholdConfig, InfrastructureConfig, NetworkConfig, RecovUSConfig
+    ThresholdConfig, InfrastructureConfig, NetworkConfig, RecovUSConfig,
+    DisasterFundingConfig,
 )
 from .network import CommunityNetwork
 from .heuristics import (
@@ -29,18 +30,24 @@ from .heuristics import (
     ExtractedParameters, RecovUSExtractedParameters, ParameterExtractor
 )
 from .decision_model import DecisionModel, create_decision_model
+from .disaster_funding import (
+    DisasterFundingRecord,
+    FundingParameterTranslator,
+    load_disaster_record,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class ParameterMerger:
     """
-    Merges parameters from config file and RAG extraction.
+    Merges parameters from config file, RAG extraction, and disaster funding data.
 
-    Implements precedence:
-    1. RAG-extracted (if confidence >= threshold)
-    2. Config file values
-    3. Hardcoded defaults
+    Implements precedence (highest to lowest):
+    1. Official disaster funding data (if disaster specified)
+    2. RAG-extracted (if confidence >= threshold)
+    3. Config file values
+    4. Hardcoded defaults
     """
 
     def __init__(
@@ -51,6 +58,8 @@ class ParameterMerger:
         confidence_threshold: float = 0.7,
         recovus_config: RecovUSConfig | None = None,
         recovus_extracted: RecovUSExtractedParameters | None = None,
+        funding_record: DisasterFundingRecord | None = None,
+        prefer_official_over_research: bool = True,
     ):
         """
         Initialize the parameter merger.
@@ -62,6 +71,8 @@ class ParameterMerger:
             confidence_threshold: Minimum confidence to use RAG-extracted values
             recovus_config: RecovUS configuration from config file
             recovus_extracted: RecovUS parameters extracted from research papers
+            funding_record: Official disaster funding data (takes precedence)
+            prefer_official_over_research: If True, official data overrides RAG values
         """
         self.sim_config = sim_config
         self.thresholds = thresholds
@@ -69,7 +80,10 @@ class ParameterMerger:
         self.confidence_threshold = confidence_threshold
         self.recovus_config = recovus_config or RecovUSConfig()
         self.recovus_extracted = recovus_extracted or RecovUSExtractedParameters()
+        self.funding_record = funding_record
+        self.prefer_official_over_research = prefer_official_over_research
         self._merge_log: list[tuple[str, float, str]] = []  # (param, value, source)
+        self._funding_translator = FundingParameterTranslator()
 
     def get_base_recovery_rate(self) -> tuple[float, str]:
         """
@@ -216,10 +230,13 @@ class ParameterMerger:
 
     def get_recovus_config(self) -> tuple[RecovUSConfig, list[tuple[str, Any, str]]]:
         """
-        Get RecovUS configuration with RAG-extracted overrides applied.
+        Get RecovUS configuration with 4-tier merge applied.
 
-        Applies RAG-extracted parameters to RecovUS config if confidence
-        meets threshold.
+        Precedence (highest to lowest):
+        1. Official disaster funding data (if provided and prefer_official=True)
+        2. RAG-extracted parameters (if confidence >= threshold)
+        3. Config file values
+        4. Hardcoded defaults
 
         Returns:
             Tuple of (merged RecovUSConfig, list of (param, value, source) tuples)
@@ -229,10 +246,21 @@ class ParameterMerger:
         config = self.recovus_config
         merge_log: list[tuple[str, Any, str]] = []
 
-        # Apply RAG-extracted parameters if confidence meets threshold
+        # Step 1: Apply RAG-extracted parameters if confidence meets threshold
         config = self.recovus_extracted.apply_to_config(
             config, self.confidence_threshold
         )
+
+        # Step 2: Apply official disaster funding data (takes precedence if enabled)
+        if self.funding_record is not None and self.prefer_official_over_research:
+            config, funding_log = self._funding_translator.apply_to_config(
+                self.funding_record, config
+            )
+            merge_log.extend(funding_log)
+            if funding_log:
+                logger.info(
+                    f"Applied official funding data from: {self.funding_record.disaster_name}"
+                )
 
         # Track what was merged
         extracted = self.recovus_extracted
@@ -439,6 +467,7 @@ class SimulationEngine:
         infra_config: InfrastructureConfig | None = None,
         network_config: NetworkConfig | None = None,
         recovus_config: RecovUSConfig | None = None,
+        disaster_funding_config: DisasterFundingConfig | None = None,
     ):
         """
         Initialize the simulation engine.
@@ -452,6 +481,7 @@ class SimulationEngine:
             infra_config: Configuration for infrastructure parameters
             network_config: Configuration for network connection parameters
             recovus_config: Configuration for RecovUS decision model
+            disaster_funding_config: Configuration for disaster-specific funding data
         """
         self.config = config
         self.api_config = api_config or APIConfig()
@@ -462,8 +492,45 @@ class SimulationEngine:
         self.infra_config = infra_config or InfrastructureConfig()
         self.network_config = network_config or NetworkConfig()
         self.recovus_config = recovus_config or RecovUSConfig()
+        self.disaster_funding_config = disaster_funding_config or DisasterFundingConfig()
         self._decision_model: DecisionModel | None = None
         self._rng: np.random.Generator | None = None
+        self._funding_record: DisasterFundingRecord | None = None
+
+        # Load disaster funding record if specified
+        self._load_disaster_funding()
+
+    def _load_disaster_funding(self) -> None:
+        """Load disaster funding record based on configuration."""
+        cfg = self.disaster_funding_config
+
+        # Check if a disaster is specified
+        if cfg.disaster_file or cfg.disaster_name or cfg.disaster_number:
+            self._funding_record = load_disaster_record(
+                disaster_name=cfg.disaster_name,
+                disaster_number=cfg.disaster_number,
+                disaster_file=cfg.disaster_file,
+            )
+
+            if self._funding_record is not None:
+                logger.info(
+                    f"Loaded disaster funding data: {self._funding_record.disaster_name}"
+                )
+
+                # Apply funding data to RecovUS config
+                translator = FundingParameterTranslator()
+                self.recovus_config, merge_log = translator.apply_to_config(
+                    self._funding_record,
+                    self.recovus_config,
+                )
+
+                for param, value, source in merge_log:
+                    logger.info(f"  {param}: {value} (from {source})")
+            else:
+                logger.warning(
+                    f"Could not load disaster funding data for: "
+                    f"{cfg.disaster_name or cfg.disaster_number or cfg.disaster_file}"
+                )
 
     def build_knowledge_base(self) -> list[Heuristic]:
         """

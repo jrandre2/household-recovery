@@ -93,6 +93,14 @@ recovus:
   transition_r2: 0.95
   transition_relocate: 0.05
   # See docs/user-guide/recovus.md for additional financial and damage parameters
+
+disaster_funding:
+  use_builtin_registry: true
+  disaster_name: null           # e.g., "Hurricane Harvey"
+  disaster_number: null         # e.g., 4332
+  disaster_file: null           # Path to custom YAML
+  prefer_official_over_research: true
+  # See docs/user-guide/disaster-funding.md for full guide
 ```
 
 ## Configuration Classes
@@ -213,6 +221,20 @@ Decision model parameters for RecovUS.
 
 For the full RecovUS parameter list, see `docs/user-guide/recovus.md`.
 
+### DisasterFundingConfig
+
+Configuration for disaster-specific funding data.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `use_builtin_registry` | bool | true | Load disasters from data/disasters/ |
+| `disaster_name` | str/None | None | Disaster name (e.g., "Hurricane Harvey") |
+| `disaster_number` | int/None | None | FEMA disaster number (e.g., 4332) |
+| `disaster_file` | Path/None | None | Path to custom YAML file |
+| `prefer_official_over_research` | bool | true | Official data overrides RAG values |
+
+For the full disaster funding guide, see `docs/user-guide/disaster-funding.md`.
+
 ## Network Types
 
 | Type | Description | Best For |
@@ -226,11 +248,12 @@ For the full RecovUS parameter list, see `docs/user-guide/recovus.md`.
 
 Parameters are merged with this priority (highest first):
 
-1. **RAG-extracted** - From research papers (if confidence >= 0.7)
-2. **Config file** - Values from YAML/JSON
-3. **Hardcoded defaults** - Built-in fallbacks
+1. **Official disaster data** - From disaster YAML files (if `--disaster` specified)
+2. **RAG-extracted** - From research papers (if confidence >= 0.7)
+3. **Config file** - Values from YAML/JSON
+4. **Hardcoded defaults** - Built-in fallbacks
 
-This allows research-grounded values to automatically improve simulations while preserving manual override capability.
+This allows official disaster data to override research-extracted values, ensuring simulations use verified numbers when available.
 
 ## Environment Variables
 
@@ -285,5 +308,9 @@ python -m household_recovery --help
 | `--groq-key` | | Groq API key |
 | `--fallback-only` | | Skip RAG, use fallback heuristics |
 | `--prefer-scholar` | | Prefer Scholar over local PDFs |
+| `--disaster` | `-d` | Use known disaster funding data (e.g., "Hurricane Harvey") |
+| `--disaster-number` | | Use FEMA disaster number (e.g., 4332) |
+| `--disaster-file` | | Load disaster funding from custom YAML file |
+| `--list-disasters` | | List available disasters in registry and exit |
 | `--verbose` | `-v` | Verbose logging |
 | `--version` | | Show version and exit |

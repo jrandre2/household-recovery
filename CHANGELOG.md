@@ -9,7 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Comprehensive documentation update (CONTRIBUTING.md, development guide, troubleshooting)
+- **Disaster-Specific Funding Data**: Calibrate simulations with official funding data from known disasters
+  - `DisasterFundingRecord` dataclass for storing official disaster funding data
+  - `FundingParameterTranslator` for converting aggregate data to simulation parameters
+  - `DisasterFundingRegistry` for managing multiple disaster records
+  - Built-in Hurricane Harvey (DR-4332) data with CDBG-DR, FEMA IA, SBA, NFIP figures
+  - CLI flags: `--disaster`, `--disaster-number`, `--disaster-file`, `--list-disasters`
+  - 4-tier parameter precedence: official data → RAG-extracted → config file → defaults
+
+- **18 Research-Based Configurations**: Pre-built configs derived from peer-reviewed disaster recovery studies
+  - Hurricanes: Andrew (1992), Katrina (2005), Ike (2008), Charley (2004), Harvey (2017)
+  - Floods: Wilson (2021), Frimpong (2025), Kousky & Kunreuther (2012)
+  - Wildfires: Camp Fire / Tubbs Fire (2017-2018)
+  - Tornadoes: Joplin (2011)
+  - Parameter extraction notes in `configs/manual/parameters.md`
+
+- Comprehensive documentation update
+  - `docs/user-guide/disaster-funding.md` - Complete user guide
+  - `docs/api-reference/disaster-funding.md` - API reference
+  - `docs/examples/research-configs.md` - Research config index
+  - Updated configuration and README documentation
 
 ## [0.2.0] - 2024-01-15
 
